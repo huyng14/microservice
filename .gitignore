@@ -1,0 +1,41 @@
+# Go binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Build output
+bin/
+dist/
+release/
+
+# Go modules vendor dir
+vendor/
+
+# Coverage
+*.cover
+coverage.out
+
+# Logs
+*.log
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Editor/IDE
+.vscode/
+.idea/
+*.iml
+
+# Env & local config
+.env
+.env.*
+*.local
+
+# Temporary files
+*.swp
+*~

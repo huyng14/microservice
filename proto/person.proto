@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+package person;
+
+option go_package = "template/personpb";
+
+service PersistenceService {
+  rpc GetPerson (GetPersonRequest) returns (GetPersonResponse);
+  rpc ListPersons (google.protobuf.Empty) returns (stream GetPersonResponse);
+  rpc PostPerson (PostPersonRequest) returns (PostPersonResponse);
+}
+
+message GetPersonRequest {
+  uint64 id = 1;
+}
+
+message GetPersonResponse {
+  Person person = 1;
+}
+
+message PostPersonRequest {
+  Person person = 1;
+}
+
+message PostPersonResponse {
+  uint64 id = 1;
+}
+
+message Person {
+  uint64 id = 1;
+  string name = 2;
+  string experience = 3;
+  string skills = 4;
+  google.protobuf.Timestamp createdAt = 5;
+  string email = 6;
+}
