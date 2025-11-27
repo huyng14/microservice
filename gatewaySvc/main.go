@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	loggingpb "microservice/template/logpb"
 	pb "microservice/template/personpb"
 
 	"google.golang.org/grpc"
@@ -17,6 +19,7 @@ import (
 )
 
 var grpcClient pb.PersistenceServiceClient
+var logClient loggingpb.LogServiceClient
 
 func handleGetPerson(w http.ResponseWriter, r *http.Request) {
 	req := &pb.GetPersonRequest{}
@@ -122,7 +125,30 @@ func handleListProfiles(w http.ResponseWriter, r *http.Request) {
 func firstPage(w http.ResponseWriter, r *http.Request) {
 	// Only handle GET requests
 	if r.Method != http.MethodGet {
+		// Call gRPC method
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+
+		var buf bytes.Buffer
+		logger := log.New(&buf, "", log.LstdFlags|log.Lshortfile)
+		logger.Println("firstPage: method not allowed")
+		stackTrace := buf.String()
+		_, err := logClient.LogEvent(ctx, &loggingpb.LogEventRequest{
+			LogEntry: &loggingpb.LogEntry{
+				Service:    "gatewaySvc",
+				Level:      "ERROR",
+				Message:    fmt.Sprintf("Method not allowed", http.StatusMethodNotAllowed),
+				TraceId:    "trace001",
+				SpanId:     "span001",
+				StackTrace: stackTrace,
+			},
+		})
+		if err != nil {
+			log.Printf("error calling LogEvent: %v", err)
+			http.Error(w, "Error logging event", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -157,6 +183,18 @@ func main() {
 		grpcClient = pb.NewPersistenceServiceClient(conn)
 		// defer conn.Close()
 
+	}()
+
+	go func() {
+		log.Println("Starting gRPC client connection")
+		// Connect to Product Service
+		conn, err := grpc.NewClient("localhost:6514", grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			log.Fatalf("failed to connect to persistence service: %v", err)
+		}
+
+		logClient = loggingpb.NewLogServiceClient(conn)
+		// defer conn.Close()
 	}()
 	// Prevent main from exiting
 	select {}

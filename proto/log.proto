@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+package log;
+option go_package = "template/logpb";
+
+service LogService {
+  rpc LogEvent (LogEventRequest) returns (LogEventResponse);
+}
+message LogEventRequest {
+  LogEntry logEntry = 1;
+  google.protobuf.Timestamp timestamp = 2;
+}
+message LogEventResponse {
+  bool success = 1;
+}
+
+message LogEntry {
+  string service = 1;
+  string level = 2;
+  string message = 3;
+  string trace_id = 4;
+  string span_id = 5;
+  string error = 6;
+  int32 order_id = 7;
+  int32 attempt = 8;
+  int32 user_id = 9;
+  int64 latency_ms = 10;
+  string stack_trace = 11;
+  google.protobuf.Timestamp timestamp = 12;
+  // For Extra, you can use a generic string or bytes field, or a google.protobuf.Struct for arbitrary JSON
+  google.protobuf.Struct extra = 13;
+}

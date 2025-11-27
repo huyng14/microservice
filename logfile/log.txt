@@ -1,0 +1,5 @@
+{"service":"loggingSvc","level":"INFO","message":"User created","trace_id":"d4c12e7f2a9c4bf3","span_id":"operation-specific-id","user_id":123}
+{"service":"loggingSvc","level":"INFO","message":"Handled request","trace_id":"d4c12e7f2a9c4bf3","span_id":"operation-specific-id","latency_ms":34}
+{"service":"loggingSvc","level":"WARN","message":"Retrying ProductService call","trace_id":"d4c12e7f2a9c4bf3","span_id":"operation-specific-id","attempt":2}
+{"service":"loggingSvc","level":"ERROR","message":"Failed to charge credit card","trace_id":"d4c12e7f2a9c4bf3","span_id":"operation-specific-id","error":"StripeTimeout","stack_trace":"main.go:42"}
+{"service":"gatewaySvc","level":"ERROR","message":"Method not allowed%!(EXTRA int=405)","trace_id":"trace001","span_id":"span001","stack_trace":"2025/11/27 16:10:40 main.go:136: firstPage: method not allowed\n","extra":null}

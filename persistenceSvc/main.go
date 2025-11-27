@@ -158,7 +158,7 @@ func main() {
 	grpcServer := grpc.NewServer()
 	pb.RegisterPersistenceServiceServer(grpcServer, &PersistenceServer{})
 
-	log.Println("Product Service gRPC server running at port 9000...")
+	log.Println("Persistence Service gRPC server running at port 9000...")
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
