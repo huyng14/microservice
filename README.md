@@ -8,7 +8,7 @@
 - Logging service
     - gRPC port 6514
 
-![architecture.jpg]() 
+![architecture.jpg](imgs/architecture.jpg) 
 
 # APIs
 
