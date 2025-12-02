@@ -20,6 +20,8 @@ import (
 
 var grpcClient pb.PersistenceServiceClient
 var logClient loggingpb.LogServiceClient
+var buf bytes.Buffer
+var logger = log.New(&buf, "", log.LstdFlags|log.Lshortfile)
 
 func handleGetPerson(w http.ResponseWriter, r *http.Request) {
 	req := &pb.GetPersonRequest{}
@@ -128,26 +130,17 @@ func firstPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 
 		// Call gRPC logging method
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
+		// Only keep the latest log entry
+		buf.Reset()
+		// Write log to the buffer
+		logger.Println("firstPage: method not allowed", http.StatusMethodNotAllowed)
+		SendLogMessage(
+			logger,
+			&buf,
+			"ERROR",
+			fmt.Sprintf("firstPage: method not allowed", http.StatusMethodNotAllowed),
+		)
 
-		var buf bytes.Buffer
-		logger := log.New(&buf, "", log.LstdFlags|log.Lshortfile)
-		logger.Println("firstPage: method not allowed")
-		stackTrace := buf.String()
-		_, err := logClient.LogEvent(ctx, &loggingpb.LogEventRequest{
-			LogEntry: &loggingpb.LogEntry{
-				Service:    "gatewaySvc",
-				Level:      "ERROR",
-				Message:    fmt.Sprintf("Method not allowed", http.StatusMethodNotAllowed),
-				TraceId:    "trace001",
-				SpanId:     "span001",
-				StackTrace: stackTrace,
-			},
-		})
-		if err != nil {
-			log.Printf("error calling LogEvent: %v", err)
-		}
 		return
 	}
 
@@ -155,6 +148,37 @@ func firstPage(w http.ResponseWriter, r *http.Request) {
 	response := fmt.Sprintf("Hello stranger. \nTime: %s", time.Now())
 
 	fmt.Fprint(w, response)
+}
+
+func SendLogMessage(
+	logger *log.Logger,
+	buf *bytes.Buffer,
+	level string,
+	message string,
+) error {
+	// Call gRPC logging method
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	// Extract stack trace from buffer
+	stackTrace := buf.String()
+
+	// Send log via gRPC
+	_, err := logClient.LogEvent(ctx, &loggingpb.LogEventRequest{
+		LogEntry: &loggingpb.LogEntry{
+			Service:    "gatewaySvc",
+			Level:      level,
+			Message:    message,
+			StackTrace: stackTrace,
+		},
+	})
+
+	if err != nil {
+		log.Printf("error calling LogEvent: %v", err)
+		return err
+	}
+
+	return nil
 }
 
 func main() {

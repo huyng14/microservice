@@ -20,8 +20,8 @@ type LogEntry struct {
 	Service    string      `json:"service"`
 	Level      string      `json:"level"`
 	Message    string      `json:"message"`
-	TraceID    string      `json:"trace_id"`
-	SpanID     string      `json:"span_id"`
+	TraceID    string      `json:"trace_id,omitempty"`
+	SpanID     string      `json:"span_id,omitempty"`
 	Error      string      `json:"error,omitempty"`
 	OrderID    int         `json:"order_id,omitempty"`
 	Attempt    int         `json:"attempt,omitempty"`
