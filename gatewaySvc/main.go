@@ -14,11 +14,12 @@ import (
 	pb "microservice/template/personpb"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-var grpcClient pb.PersistenceServiceClient
+var persistenceClient pb.PersistenceServiceClient
 var logClient loggingpb.LogServiceClient
 var buf bytes.Buffer
 var logger = log.New(&buf, "", log.LstdFlags|log.Lshortfile)
@@ -28,6 +29,18 @@ func handleGetPerson(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+
+		// Call gRPC logging method
+		// Only keep the latest log entry
+		buf.Reset()
+		// Write log to the buffer
+		logger.Println("Invalid request body", http.StatusBadRequest)
+		SendLogMessage(
+			logger,
+			&buf,
+			"ERROR",
+			fmt.Sprintf("Invalid request body", http.StatusBadRequest),
+		)
 		return
 	}
 
@@ -35,10 +48,22 @@ func handleGetPerson(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	res, err := grpcClient.GetPerson(ctx, &pb.GetPersonRequest{Id: req.Id})
+	res, err := persistenceClient.GetPerson(ctx, &pb.GetPersonRequest{Id: req.Id})
 	if err != nil {
 		log.Printf("error calling GetPerson: %v", err)
 		http.Error(w, "Error fetching person", http.StatusInternalServerError)
+
+		// Call gRPC logging method
+		// Only keep the latest log entry
+		buf.Reset()
+		// Write log to the buffer
+		logger.Printf("error calling GetPerson: %v", err)
+		SendLogMessage(
+			logger,
+			&buf,
+			"ERROR",
+			fmt.Sprintf("Error fetching person", http.StatusInternalServerError),
+		)
 		return
 	}
 
@@ -52,6 +77,18 @@ func handlePostPerson(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req.Person)
 	if err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+
+		// Call gRPC logging method
+		// Only keep the latest log entry
+		buf.Reset()
+		// Write log to the buffer
+		logger.Println("Invalid request body", http.StatusBadRequest)
+		SendLogMessage(
+			logger,
+			&buf,
+			"ERROR",
+			fmt.Sprintf("Invalid request body", http.StatusBadRequest),
+		)
 		return
 	}
 	log.Println("Print PostPersonRequest: ", req.Person)
@@ -59,10 +96,22 @@ func handlePostPerson(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	res, err := grpcClient.PostPerson(ctx, req)
+	res, err := persistenceClient.PostPerson(ctx, req)
 	if err != nil {
 		log.Printf("error calling PostPerson: %v", err)
 		http.Error(w, "Error posting person", http.StatusInternalServerError)
+
+		// Call gRPC logging method
+		// Only keep the latest log entry
+		buf.Reset()
+		// Write log to the buffer
+		logger.Printf("error calling PostPerson: %v", err)
+		SendLogMessage(
+			logger,
+			&buf,
+			"ERROR",
+			fmt.Sprintf("Error posting person", http.StatusInternalServerError),
+		)
 		return
 	}
 
@@ -80,6 +129,18 @@ func handleProfiles(w http.ResponseWriter, r *http.Request) {
 		handlePostPerson(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+
+		// Call gRPC logging method
+		// Only keep the latest log entry
+		buf.Reset()
+		// Write log to the buffer
+		logger.Println("Method not allowed", http.StatusMethodNotAllowed)
+		SendLogMessage(
+			logger,
+			&buf,
+			"ERROR",
+			fmt.Sprintf("Method not allowed", http.StatusMethodNotAllowed),
+		)
 	}
 }
 
@@ -87,16 +148,40 @@ func handleListProfiles(w http.ResponseWriter, r *http.Request) {
 	// Only handle GET requests
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+
+		// Call gRPC logging method
+		// Only keep the latest log entry
+		buf.Reset()
+		// Write log to the buffer
+		logger.Printf("Method not allowed", http.StatusMethodNotAllowed)
+		SendLogMessage(
+			logger,
+			&buf,
+			"ERROR",
+			fmt.Sprintf("Method not allowed", http.StatusMethodNotAllowed),
+		)
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	stream, err := grpcClient.ListPersons(ctx, &emptypb.Empty{})
+	stream, err := persistenceClient.ListPersons(ctx, &emptypb.Empty{})
 	if err != nil {
 		log.Printf("error calling ListPersons: %v", err)
 		http.Error(w, "Error listing persons", http.StatusInternalServerError)
+
+		// Call gRPC logging method
+		// Only keep the latest log entry
+		buf.Reset()
+		// Write log to the buffer
+		logger.Printf("error calling ListPersons: %v", err)
+		SendLogMessage(
+			logger,
+			&buf,
+			"ERROR",
+			fmt.Sprintf("Error listing persons", http.StatusInternalServerError),
+		)
 		return
 	}
 
@@ -109,6 +194,18 @@ func handleListProfiles(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("error receiving from stream: %v", err)
 			http.Error(w, fmt.Sprintf("error receiving from stream: %v", err), http.StatusInternalServerError)
+
+			// Call gRPC logging method
+			// Only keep the latest log entry
+			buf.Reset()
+			// Write log to the buffer
+			logger.Printf("error receiving from stream: %v", err)
+			SendLogMessage(
+				logger,
+				&buf,
+				"ERROR",
+				fmt.Sprintf("error receiving from stream: %v, %v", err, http.StatusInternalServerError),
+			)
 			return
 		}
 		persons = append(persons, *personRes.Person)
@@ -117,6 +214,18 @@ func handleListProfiles(w http.ResponseWriter, r *http.Request) {
 	responseData, err := json.Marshal(persons)
 	if err != nil {
 		http.Error(w, "Error marshalling response", http.StatusInternalServerError)
+
+		// Call gRPC logging method
+		// Only keep the latest log entry
+		buf.Reset()
+		// Write log to the buffer
+		logger.Println("Error marshalling response", http.StatusInternalServerError)
+		SendLogMessage(
+			logger,
+			&buf,
+			"ERROR",
+			fmt.Sprintf("Error marshalling response", http.StatusInternalServerError),
+		)
 		return
 	}
 
@@ -197,21 +306,40 @@ func main() {
 
 	go func() {
 		log.Println("Starting gRPC client connection to Persistence Service")
+
+		retryPolicy := backoff.Config{
+			BaseDelay:  1 * time.Second,  // initial backoff
+			Multiplier: 1.6,              // backoff multiplier
+			MaxDelay:   10 * time.Second, // max delay
+		}
 		// Connect to Persistence Service
-		conn, err := grpc.NewClient("localhost:9000", grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.NewClient("localhost:9000", grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithConnectParams(grpc.ConnectParams{
+				Backoff:           retryPolicy,
+				MinConnectTimeout: 5 * time.Second,
+			}))
 		if err != nil {
 			log.Fatalf("failed to connect to persistence service: %v", err)
 		}
 
-		grpcClient = pb.NewPersistenceServiceClient(conn)
+		persistenceClient = pb.NewPersistenceServiceClient(conn)
 		// defer conn.Close()
 
 	}()
 
 	go func() {
 		log.Println("Starting gRPC client connection to Logging Service")
+
+		retryPolicy := backoff.Config{
+			BaseDelay:  1 * time.Second,  // initial backoff
+			Multiplier: 1.6,              // backoff multiplier
+			MaxDelay:   10 * time.Second, // max delay
+		}
 		// Connect to Logging Service
-		conn, err := grpc.NewClient("localhost:6514", grpc.WithTransportCredentials(insecure.NewCredentials()))
+		conn, err := grpc.NewClient("localhost:6514", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithConnectParams(grpc.ConnectParams{
+			Backoff:           retryPolicy,
+			MinConnectTimeout: 5 * time.Second,
+		}))
 		if err != nil {
 			log.Fatalf("failed to connect to persistence service: %v", err)
 		}
