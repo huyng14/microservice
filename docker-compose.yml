@@ -1,0 +1,46 @@
+services:
+  gatewaySvc:
+    image: micro-services-gatewaysvc
+    build:
+      context: ./gatewaySvc
+      dockerfile: Dockerfile
+    container_name: gatewaySvc
+    ports:
+      - "8080:8080" # expose HTTP gateway to host
+    depends_on:
+      - persistenceSvc
+      - loggingSvc
+    environment:
+      # gRPC endpoints of downstream services (reachable via Docker DNS)
+      PERSISTENCE_GRPC_ADDR: persistenceSvc:9000
+      LOGGING_GRPC_ADDR: loggingSvc:6514
+    networks:
+      - backend
+
+  persistenceSvc:
+    image: micro-services-persistencesvc
+    build:
+      context: ./persistenceSvc
+      dockerfile: Dockerfile
+    container_name: persistenceSvc
+    # gRPC port (internal; not exposed to host unless you need it)
+    expose:
+      - "9000"
+    networks:
+      - backend
+
+  loggingSvc:
+    image: micro-services-loggingsvc
+    build:
+      context: ./loggingSvc
+      dockerfile: Dockerfile
+    container_name: loggingSvc
+    # gRPC port (internal; not exposed to host unless you need it)
+    expose:
+      - "6514"
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge

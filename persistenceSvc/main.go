@@ -7,7 +7,7 @@ import (
 	"net"
 	"time"
 
-	"microservice/persistenceSvc/models"
+	"microservice/models"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
