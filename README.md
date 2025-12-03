@@ -15,3 +15,10 @@
 1. List all profiles
 2. Get a profile
 3. Add a profile
+
+# Run command
+```
+go run gatewaySvc/main.go
+go run persistenceSvc/main.go
+go run loggingSvc/main.go
+```
