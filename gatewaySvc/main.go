@@ -316,8 +316,8 @@ func main() {
 		// Connect to Persistence Service
 		persistenceAddr := os.Getenv("PERSISTENCE_GRPC_ADDR")
 		if persistenceAddr == "" {
-			log.Println("PERSISTENCE_GRPC_ADDR not set, defaulting to persistenceSvc:9000")
-			persistenceAddr = "persistenceSvc:9000"
+			log.Println("PERSISTENCE_GRPC_ADDR not set, defaulting to localhost:9000")
+			persistenceAddr = "localhost:9000"
 		}
 		conn, err := grpc.NewClient(persistenceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithConnectParams(grpc.ConnectParams{
@@ -344,8 +344,8 @@ func main() {
 		// Connect to Logging Service
 		loggingAddr := os.Getenv("LOGGING_GRPC_ADDR")
 		if loggingAddr == "" {
-			log.Println("LOGGING_GRPC_ADDR not set, defaulting to loggingSvc:6514")
-			loggingAddr = "loggingSvc:6514"
+			log.Println("LOGGING_GRPC_ADDR not set, defaulting to localhost:6514")
+			loggingAddr = "localhost:6514"
 		}
 		conn, err := grpc.NewClient(loggingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithConnectParams(grpc.ConnectParams{
 			Backoff:           retryPolicy,
