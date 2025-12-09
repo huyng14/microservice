@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	loggingpb "microservice/template/logpb"
@@ -313,7 +314,12 @@ func main() {
 			MaxDelay:   10 * time.Second, // max delay
 		}
 		// Connect to Persistence Service
-		conn, err := grpc.NewClient("localhost:9000", grpc.WithTransportCredentials(insecure.NewCredentials()),
+		persistenceAddr := os.Getenv("PERSISTENCE_GRPC_ADDR")
+		if persistenceAddr == "" {
+			log.Println("PERSISTENCE_GRPC_ADDR not set, defaulting to localhost:9000")
+			persistenceAddr = "localhost:9000"
+		}
+		conn, err := grpc.NewClient(persistenceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithConnectParams(grpc.ConnectParams{
 				Backoff:           retryPolicy,
 				MinConnectTimeout: 5 * time.Second,
@@ -336,7 +342,12 @@ func main() {
 			MaxDelay:   10 * time.Second, // max delay
 		}
 		// Connect to Logging Service
-		conn, err := grpc.NewClient("localhost:6514", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithConnectParams(grpc.ConnectParams{
+		loggingAddr := os.Getenv("LOGGING_GRPC_ADDR")
+		if loggingAddr == "" {
+			log.Println("LOGGING_GRPC_ADDR not set, defaulting to localhost:6514")
+			loggingAddr = "localhost:6514"
+		}
+		conn, err := grpc.NewClient(loggingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithConnectParams(grpc.ConnectParams{
 			Backoff:           retryPolicy,
 			MinConnectTimeout: 5 * time.Second,
 		}))
