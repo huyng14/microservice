@@ -283,6 +283,86 @@ func (x *Person) GetEmail() string {
 	return ""
 }
 
+type PingRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PingRequest) Reset() {
+	*x = PingRequest{}
+	mi := &file_proto_person_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PingRequest) ProtoMessage() {}
+
+func (x *PingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_person_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PingRequest.ProtoReflect.Descriptor instead.
+func (*PingRequest) Descriptor() ([]byte, []int) {
+	return file_proto_person_proto_rawDescGZIP(), []int{5}
+}
+
+type PingResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"` // e.g., "OK"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PingResponse) Reset() {
+	*x = PingResponse{}
+	mi := &file_proto_person_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PingResponse) ProtoMessage() {}
+
+func (x *PingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_person_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PingResponse.ProtoReflect.Descriptor instead.
+func (*PingResponse) Descriptor() ([]byte, []int) {
+	return file_proto_person_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *PingResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
 var File_proto_person_proto protoreflect.FileDescriptor
 
 const file_proto_person_proto_rawDesc = "" +
@@ -304,12 +384,16 @@ const file_proto_person_proto_rawDesc = "" +
 	"experience\x12\x16\n" +
 	"\x06skills\x18\x04 \x01(\tR\x06skills\x128\n" +
 	"\tcreatedAt\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x14\n" +
-	"\x05email\x18\x06 \x01(\tR\x05email2\xdf\x01\n" +
+	"\x05email\x18\x06 \x01(\tR\x05email\"\r\n" +
+	"\vPingRequest\"&\n" +
+	"\fPingResponse\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status2\x92\x02\n" +
 	"\x12PersistenceService\x12@\n" +
 	"\tGetPerson\x12\x18.person.GetPersonRequest\x1a\x19.person.GetPersonResponse\x12B\n" +
 	"\vListPersons\x12\x16.google.protobuf.Empty\x1a\x19.person.GetPersonResponse0\x01\x12C\n" +
 	"\n" +
-	"PostPerson\x12\x19.person.PostPersonRequest\x1a\x1a.person.PostPersonResponseB\x13Z\x11template/personpbb\x06proto3"
+	"PostPerson\x12\x19.person.PostPersonRequest\x1a\x1a.person.PostPersonResponse\x121\n" +
+	"\x04Ping\x12\x13.person.PingRequest\x1a\x14.person.PingResponseB\x13Z\x11template/personpbb\x06proto3"
 
 var (
 	file_proto_person_proto_rawDescOnce sync.Once
@@ -323,28 +407,32 @@ func file_proto_person_proto_rawDescGZIP() []byte {
 	return file_proto_person_proto_rawDescData
 }
 
-var file_proto_person_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_proto_person_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_proto_person_proto_goTypes = []any{
 	(*GetPersonRequest)(nil),      // 0: person.GetPersonRequest
 	(*GetPersonResponse)(nil),     // 1: person.GetPersonResponse
 	(*PostPersonRequest)(nil),     // 2: person.PostPersonRequest
 	(*PostPersonResponse)(nil),    // 3: person.PostPersonResponse
 	(*Person)(nil),                // 4: person.Person
-	(*timestamppb.Timestamp)(nil), // 5: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),         // 6: google.protobuf.Empty
+	(*PingRequest)(nil),           // 5: person.PingRequest
+	(*PingResponse)(nil),          // 6: person.PingResponse
+	(*timestamppb.Timestamp)(nil), // 7: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),         // 8: google.protobuf.Empty
 }
 var file_proto_person_proto_depIdxs = []int32{
 	4, // 0: person.GetPersonResponse.person:type_name -> person.Person
 	4, // 1: person.PostPersonRequest.person:type_name -> person.Person
-	5, // 2: person.Person.createdAt:type_name -> google.protobuf.Timestamp
+	7, // 2: person.Person.createdAt:type_name -> google.protobuf.Timestamp
 	0, // 3: person.PersistenceService.GetPerson:input_type -> person.GetPersonRequest
-	6, // 4: person.PersistenceService.ListPersons:input_type -> google.protobuf.Empty
+	8, // 4: person.PersistenceService.ListPersons:input_type -> google.protobuf.Empty
 	2, // 5: person.PersistenceService.PostPerson:input_type -> person.PostPersonRequest
-	1, // 6: person.PersistenceService.GetPerson:output_type -> person.GetPersonResponse
-	1, // 7: person.PersistenceService.ListPersons:output_type -> person.GetPersonResponse
-	3, // 8: person.PersistenceService.PostPerson:output_type -> person.PostPersonResponse
-	6, // [6:9] is the sub-list for method output_type
-	3, // [3:6] is the sub-list for method input_type
+	5, // 6: person.PersistenceService.Ping:input_type -> person.PingRequest
+	1, // 7: person.PersistenceService.GetPerson:output_type -> person.GetPersonResponse
+	1, // 8: person.PersistenceService.ListPersons:output_type -> person.GetPersonResponse
+	3, // 9: person.PersistenceService.PostPerson:output_type -> person.PostPersonResponse
+	6, // 10: person.PersistenceService.Ping:output_type -> person.PingResponse
+	7, // [7:11] is the sub-list for method output_type
+	3, // [3:7] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
 	3, // [3:3] is the sub-list for extension extendee
 	0, // [0:3] is the sub-list for field type_name
@@ -361,7 +449,7 @@ func file_proto_person_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_person_proto_rawDesc), len(file_proto_person_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

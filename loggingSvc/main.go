@@ -110,6 +110,10 @@ func main() {
 	// Never log sensitive data!
 }
 
+func (s *LogServiceServer) Ping(ctx context.Context, req *pb.PingRequest) (*pb.PingResponse, error) {
+	return &pb.PingResponse{Status: "OK"}, nil
+}
+
 func (s *LogServiceServer) LogEvent(ctx context.Context, req *pb.LogEventRequest) (*pb.LogEventResponse, error) {
 	logJSON(LogEntry{
 		Service:    req.LogEntry.Service,

@@ -11,6 +11,7 @@ service PersistenceService {
   rpc GetPerson (GetPersonRequest) returns (GetPersonResponse);
   rpc ListPersons (google.protobuf.Empty) returns (stream GetPersonResponse);
   rpc PostPerson (PostPersonRequest) returns (PostPersonResponse);
+  rpc Ping (PingRequest) returns (PingResponse);
 }
 
 message GetPersonRequest {
@@ -36,4 +37,9 @@ message Person {
   string skills = 4;
   google.protobuf.Timestamp createdAt = 5;
   string email = 6;
+}
+
+message PingRequest {}
+message PingResponse {
+  string status = 1; // e.g., "OK"
 }

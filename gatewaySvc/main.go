@@ -294,16 +294,9 @@ func SendLogMessage(
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	go func() {
-		log.Println("Starting HTTP server on :8080")
-		http.HandleFunc("/", firstPage)
-		http.HandleFunc("/profiles", handleProfiles)
-		http.HandleFunc("/listprofiles", handleListProfiles)
-
-		if err := http.ListenAndServe(":8080", nil); err != nil {
-			log.Fatalf("HTTP server error: %v", err)
-		}
-	}()
+	// Channels to signal gRPC client readiness
+	persistenceReady := make(chan struct{})
+	loggingReady := make(chan struct{})
 
 	go func() {
 		log.Println("Starting gRPC client connection to Persistence Service")
@@ -329,8 +322,7 @@ func main() {
 		}
 
 		persistenceClient = pb.NewPersistenceServiceClient(conn)
-		// defer conn.Close()
-
+		close(persistenceReady)
 	}()
 
 	go func() {
@@ -356,7 +348,36 @@ func main() {
 		}
 
 		logClient = loggingpb.NewLogServiceClient(conn)
-		// defer conn.Close()
+		close(loggingReady)
+	}()
+
+	go func() {
+		<-persistenceReady
+		<-loggingReady
+		log.Println("Both gRPC clients initialized, sending Ping...")
+
+		log.Println("Starting HTTP server on :8080")
+		http.HandleFunc("/", firstPage)
+		http.HandleFunc("/profiles", handleProfiles)
+		http.HandleFunc("/listprofiles", handleListProfiles)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		pongPersistence, err := persistenceClient.Ping(ctx, &pb.PingRequest{})
+		if err != nil {
+			log.Fatalf("Error pinging Persistence Service: %v", err)
+		}
+		pongLogging, err := logClient.Ping(ctx, &loggingpb.PingRequest{})
+		if err != nil {
+			log.Fatalf("Error pinging Logging Service: %v", err)
+		}
+		if pongPersistence.GetStatus() == "OK" && pongLogging.GetStatus() == "OK" {
+			if err := http.ListenAndServe(":8080", nil); err != nil {
+				log.Fatalf("HTTP server error: %v", err)
+			}
+		} else {
+			log.Println("Persistence Service Ping failed, cannot start HTTP server")
+		}
 	}()
 	// Prevent main from exiting
 	select {}

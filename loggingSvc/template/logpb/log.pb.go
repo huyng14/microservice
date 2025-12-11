@@ -260,6 +260,86 @@ func (x *LogEntry) GetExtra() *structpb.Struct {
 	return nil
 }
 
+type PingRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PingRequest) Reset() {
+	*x = PingRequest{}
+	mi := &file_proto_log_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PingRequest) ProtoMessage() {}
+
+func (x *PingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_log_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PingRequest.ProtoReflect.Descriptor instead.
+func (*PingRequest) Descriptor() ([]byte, []int) {
+	return file_proto_log_proto_rawDescGZIP(), []int{3}
+}
+
+type PingResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"` // e.g., "OK"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PingResponse) Reset() {
+	*x = PingResponse{}
+	mi := &file_proto_log_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PingResponse) ProtoMessage() {}
+
+func (x *PingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_log_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PingResponse.ProtoReflect.Descriptor instead.
+func (*PingResponse) Descriptor() ([]byte, []int) {
+	return file_proto_log_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *PingResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
 var File_proto_log_proto protoreflect.FileDescriptor
 
 const file_proto_log_proto_rawDesc = "" +
@@ -286,10 +366,14 @@ const file_proto_log_proto_rawDesc = "" +
 	"\vstack_trace\x18\v \x01(\tR\n" +
 	"stackTrace\x128\n" +
 	"\ttimestamp\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12-\n" +
-	"\x05extra\x18\r \x01(\v2\x17.google.protobuf.StructR\x05extra2E\n" +
+	"\x05extra\x18\r \x01(\v2\x17.google.protobuf.StructR\x05extra\"\r\n" +
+	"\vPingRequest\"&\n" +
+	"\fPingResponse\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status2r\n" +
 	"\n" +
 	"LogService\x127\n" +
-	"\bLogEvent\x12\x14.log.LogEventRequest\x1a\x15.log.LogEventResponseB\x10Z\x0etemplate/logpbb\x06proto3"
+	"\bLogEvent\x12\x14.log.LogEventRequest\x1a\x15.log.LogEventResponse\x12+\n" +
+	"\x04Ping\x12\x10.log.PingRequest\x1a\x11.log.PingResponseB\x10Z\x0etemplate/logpbb\x06proto3"
 
 var (
 	file_proto_log_proto_rawDescOnce sync.Once
@@ -303,23 +387,27 @@ func file_proto_log_proto_rawDescGZIP() []byte {
 	return file_proto_log_proto_rawDescData
 }
 
-var file_proto_log_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_proto_log_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_proto_log_proto_goTypes = []any{
 	(*LogEventRequest)(nil),       // 0: log.LogEventRequest
 	(*LogEventResponse)(nil),      // 1: log.LogEventResponse
 	(*LogEntry)(nil),              // 2: log.LogEntry
-	(*timestamppb.Timestamp)(nil), // 3: google.protobuf.Timestamp
-	(*structpb.Struct)(nil),       // 4: google.protobuf.Struct
+	(*PingRequest)(nil),           // 3: log.PingRequest
+	(*PingResponse)(nil),          // 4: log.PingResponse
+	(*timestamppb.Timestamp)(nil), // 5: google.protobuf.Timestamp
+	(*structpb.Struct)(nil),       // 6: google.protobuf.Struct
 }
 var file_proto_log_proto_depIdxs = []int32{
 	2, // 0: log.LogEventRequest.logEntry:type_name -> log.LogEntry
-	3, // 1: log.LogEventRequest.timestamp:type_name -> google.protobuf.Timestamp
-	3, // 2: log.LogEntry.timestamp:type_name -> google.protobuf.Timestamp
-	4, // 3: log.LogEntry.extra:type_name -> google.protobuf.Struct
+	5, // 1: log.LogEventRequest.timestamp:type_name -> google.protobuf.Timestamp
+	5, // 2: log.LogEntry.timestamp:type_name -> google.protobuf.Timestamp
+	6, // 3: log.LogEntry.extra:type_name -> google.protobuf.Struct
 	0, // 4: log.LogService.LogEvent:input_type -> log.LogEventRequest
-	1, // 5: log.LogService.LogEvent:output_type -> log.LogEventResponse
-	5, // [5:6] is the sub-list for method output_type
-	4, // [4:5] is the sub-list for method input_type
+	3, // 5: log.LogService.Ping:input_type -> log.PingRequest
+	1, // 6: log.LogService.LogEvent:output_type -> log.LogEventResponse
+	4, // 7: log.LogService.Ping:output_type -> log.PingResponse
+	6, // [6:8] is the sub-list for method output_type
+	4, // [4:6] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name
 	4, // [4:4] is the sub-list for extension extendee
 	0, // [0:4] is the sub-list for field type_name
@@ -336,7 +424,7 @@ func file_proto_log_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_log_proto_rawDesc), len(file_proto_log_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

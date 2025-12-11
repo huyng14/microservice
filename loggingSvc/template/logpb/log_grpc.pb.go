@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	LogService_LogEvent_FullMethodName = "/log.LogService/LogEvent"
+	LogService_Ping_FullMethodName     = "/log.LogService/Ping"
 )
 
 // LogServiceClient is the client API for LogService service.
@@ -27,6 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type LogServiceClient interface {
 	LogEvent(ctx context.Context, in *LogEventRequest, opts ...grpc.CallOption) (*LogEventResponse, error)
+	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
 }
 
 type logServiceClient struct {
@@ -47,11 +49,22 @@ func (c *logServiceClient) LogEvent(ctx context.Context, in *LogEventRequest, op
 	return out, nil
 }
 
+func (c *logServiceClient) Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PingResponse)
+	err := c.cc.Invoke(ctx, LogService_Ping_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LogServiceServer is the server API for LogService service.
 // All implementations must embed UnimplementedLogServiceServer
 // for forward compatibility.
 type LogServiceServer interface {
 	LogEvent(context.Context, *LogEventRequest) (*LogEventResponse, error)
+	Ping(context.Context, *PingRequest) (*PingResponse, error)
 	mustEmbedUnimplementedLogServiceServer()
 }
 
@@ -64,6 +77,9 @@ type UnimplementedLogServiceServer struct{}
 
 func (UnimplementedLogServiceServer) LogEvent(context.Context, *LogEventRequest) (*LogEventResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LogEvent not implemented")
+}
+func (UnimplementedLogServiceServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
 }
 func (UnimplementedLogServiceServer) mustEmbedUnimplementedLogServiceServer() {}
 func (UnimplementedLogServiceServer) testEmbeddedByValue()                    {}
@@ -104,6 +120,24 @@ func _LogService_LogEvent_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LogService_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LogServiceServer).Ping(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LogService_Ping_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LogServiceServer).Ping(ctx, req.(*PingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // LogService_ServiceDesc is the grpc.ServiceDesc for LogService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -114,6 +148,10 @@ var LogService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LogEvent",
 			Handler:    _LogService_LogEvent_Handler,
+		},
+		{
+			MethodName: "Ping",
+			Handler:    _LogService_Ping_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

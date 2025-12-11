@@ -144,6 +144,10 @@ func (s *PersistenceServer) ListPersons(empty *emptypb.Empty, stream pb.Persiste
 	return nil
 }
 
+func (s *PersistenceServer) Ping(ctx context.Context, req *pb.PingRequest) (*pb.PingResponse, error) {
+	return &pb.PingResponse{Status: "OK"}, nil
+}
+
 func main() {
 	err := InitMongo("mongodb+srv://skylab:skylab@consultatantaimatch.ftecqos.mongodb.net/")
 	if err != nil {

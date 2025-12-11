@@ -8,6 +8,7 @@ option go_package = "template/logpb";
 
 service LogService {
   rpc LogEvent (LogEventRequest) returns (LogEventResponse);
+  rpc Ping (PingRequest) returns (PingResponse);
 }
 message LogEventRequest {
   LogEntry logEntry = 1;
@@ -32,4 +33,9 @@ message LogEntry {
   google.protobuf.Timestamp timestamp = 12;
   // For Extra, you can use a generic string or bytes field, or a google.protobuf.Struct for arbitrary JSON
   google.protobuf.Struct extra = 13;
+}
+
+message PingRequest {}
+message PingResponse {
+  string status = 1; // e.g., "OK"
 }

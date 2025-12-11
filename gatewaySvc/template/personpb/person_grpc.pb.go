@@ -23,6 +23,7 @@ const (
 	PersistenceService_GetPerson_FullMethodName   = "/person.PersistenceService/GetPerson"
 	PersistenceService_ListPersons_FullMethodName = "/person.PersistenceService/ListPersons"
 	PersistenceService_PostPerson_FullMethodName  = "/person.PersistenceService/PostPerson"
+	PersistenceService_Ping_FullMethodName        = "/person.PersistenceService/Ping"
 )
 
 // PersistenceServiceClient is the client API for PersistenceService service.
@@ -32,6 +33,7 @@ type PersistenceServiceClient interface {
 	GetPerson(ctx context.Context, in *GetPersonRequest, opts ...grpc.CallOption) (*GetPersonResponse, error)
 	ListPersons(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetPersonResponse], error)
 	PostPerson(ctx context.Context, in *PostPersonRequest, opts ...grpc.CallOption) (*PostPersonResponse, error)
+	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
 }
 
 type persistenceServiceClient struct {
@@ -81,6 +83,16 @@ func (c *persistenceServiceClient) PostPerson(ctx context.Context, in *PostPerso
 	return out, nil
 }
 
+func (c *persistenceServiceClient) Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PingResponse)
+	err := c.cc.Invoke(ctx, PersistenceService_Ping_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PersistenceServiceServer is the server API for PersistenceService service.
 // All implementations must embed UnimplementedPersistenceServiceServer
 // for forward compatibility.
@@ -88,6 +100,7 @@ type PersistenceServiceServer interface {
 	GetPerson(context.Context, *GetPersonRequest) (*GetPersonResponse, error)
 	ListPersons(*emptypb.Empty, grpc.ServerStreamingServer[GetPersonResponse]) error
 	PostPerson(context.Context, *PostPersonRequest) (*PostPersonResponse, error)
+	Ping(context.Context, *PingRequest) (*PingResponse, error)
 	mustEmbedUnimplementedPersistenceServiceServer()
 }
 
@@ -106,6 +119,9 @@ func (UnimplementedPersistenceServiceServer) ListPersons(*emptypb.Empty, grpc.Se
 }
 func (UnimplementedPersistenceServiceServer) PostPerson(context.Context, *PostPersonRequest) (*PostPersonResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PostPerson not implemented")
+}
+func (UnimplementedPersistenceServiceServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
 }
 func (UnimplementedPersistenceServiceServer) mustEmbedUnimplementedPersistenceServiceServer() {}
 func (UnimplementedPersistenceServiceServer) testEmbeddedByValue()                            {}
@@ -175,6 +191,24 @@ func _PersistenceService_PostPerson_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PersistenceService_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PersistenceServiceServer).Ping(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PersistenceService_Ping_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PersistenceServiceServer).Ping(ctx, req.(*PingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PersistenceService_ServiceDesc is the grpc.ServiceDesc for PersistenceService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -189,6 +223,10 @@ var PersistenceService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PostPerson",
 			Handler:    _PersistenceService_PostPerson_Handler,
+		},
+		{
+			MethodName: "Ping",
+			Handler:    _PersistenceService_Ping_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
