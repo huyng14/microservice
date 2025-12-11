@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -154,37 +155,33 @@ func main() {
 		log.Fatal("Failed to initialize MongoDB:", err)
 	}
 
+	// ==== Keepalive parameters ====
+	var kaPolicy = keepalive.EnforcementPolicy{
+		MinTime:             5 * time.Second, // Min time between pings from client
+		PermitWithoutStream: true,            // Allow keepalive pings even with no RPCs
+	}
+
+	var kaParams = keepalive.ServerParameters{
+		Time:                  10 * time.Second, // Ping clients every 10 seconds
+		Timeout:               3 * time.Second,  // Disconnect if no pong within 3 seconds
+		MaxConnectionIdle:     30 * time.Second, // Disconnect idle connections
+		MaxConnectionAge:      2 * time.Minute,  // Force reconnect every 2 minutes
+		MaxConnectionAgeGrace: 10 * time.Second, // Extra time after age expiration
+	}
+
 	lis, err := net.Listen("tcp", ":9000")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.KeepaliveEnforcementPolicy(kaPolicy),
+		grpc.KeepaliveParams(kaParams),
+	)
 	pb.RegisterPersistenceServiceServer(grpcServer, &PersistenceServer{})
 
 	log.Println("Persistence Service gRPC server running at port 9000...")
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
-
-	// user := models.User{
-	// 	ID:        1,
-	// 	Name:      "Alice",
-	// 	Email:     "AliceAtBorderland.com",
-	// 	CreatedAt: time.Now(),
-	// }
-
-	// result, err := InsertUser("microservice", "curriculumVitaes", user)
-	// if err != nil {
-	// 	log.Fatal("Failed to insert user:", err)
-	// }
-
-	// fmt.Println("Inserted user with ID:", result.InsertedID)
-
-	// retrievedUser, err := GetUserByID("microservice", "curriculumVitaes", 1)
-	// if err != nil {
-	// 	log.Fatal("Failed to get user:", err)
-	// }
-
-	// fmt.Printf("Retrieved User: %+v\n", retrievedUser)
 }

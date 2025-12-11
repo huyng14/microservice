@@ -6,10 +6,12 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 
 	pb "microservice/template/logpb"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 )
 
 type LogServiceServer struct {
@@ -46,12 +48,28 @@ func logJSON(entry LogEntry) {
 }
 
 func main() {
+	// ==== Keepalive parameters ====
+	var kaPolicy = keepalive.EnforcementPolicy{
+		MinTime:             5 * time.Second, // Min time between pings from client
+		PermitWithoutStream: true,            // Allow keepalive pings even with no RPCs
+	}
+
+	var kaParams = keepalive.ServerParameters{
+		Time:                  10 * time.Second, // Ping clients every 10 seconds
+		Timeout:               3 * time.Second,  // Disconnect if no pong within 3 seconds
+		MaxConnectionIdle:     30 * time.Second, // Disconnect idle connections
+		MaxConnectionAge:      2 * time.Minute,  // Force reconnect every 2 minutes
+		MaxConnectionAgeGrace: 10 * time.Second, // Extra time after age expiration
+	}
 	lis, err := net.Listen("tcp", ":6514")
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.KeepaliveEnforcementPolicy(kaPolicy),
+		grpc.KeepaliveParams(kaParams),
+	)
 	pb.RegisterLogServiceServer(grpcServer, &LogServiceServer{})
 
 	log.Println("Logging Service gRPC server running at port 6514...")
