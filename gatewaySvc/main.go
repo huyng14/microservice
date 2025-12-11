@@ -16,8 +16,10 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -52,14 +54,14 @@ func handleGetPerson(w http.ResponseWriter, r *http.Request) {
 
 	res, err := persistenceClient.GetPerson(ctx, &pb.GetPersonRequest{Id: req.Id})
 	if err != nil {
-		log.Printf("error calling GetPerson: %v", err)
+		log.Printf("error calling GetPerson: %v", handleRpcError(err))
 		http.Error(w, "Error fetching person", http.StatusInternalServerError)
 
 		// Call gRPC logging method
 		// Only keep the latest log entry
 		buf.Reset()
 		// Write log to the buffer
-		logger.Printf("error calling GetPerson: %v", err)
+		logger.Printf("error calling GetPerson: %v", handleRpcError(err))
 		SendLogMessage(
 			logger,
 			&buf,
@@ -100,14 +102,14 @@ func handlePostPerson(w http.ResponseWriter, r *http.Request) {
 
 	res, err := persistenceClient.PostPerson(ctx, req)
 	if err != nil {
-		log.Printf("error calling PostPerson: %v", err)
+		log.Printf("error calling PostPerson: %v", handleRpcError(err))
 		http.Error(w, "Error posting person", http.StatusInternalServerError)
 
 		// Call gRPC logging method
 		// Only keep the latest log entry
 		buf.Reset()
 		// Write log to the buffer
-		logger.Printf("error calling PostPerson: %v", err)
+		logger.Printf("error calling PostPerson: %v", handleRpcError(err))
 		SendLogMessage(
 			logger,
 			&buf,
@@ -170,14 +172,14 @@ func handleListProfiles(w http.ResponseWriter, r *http.Request) {
 
 	stream, err := persistenceClient.ListPersons(ctx, &emptypb.Empty{})
 	if err != nil {
-		log.Printf("error calling ListPersons: %v", err)
+		log.Printf("error calling ListPersons: %v", handleRpcError(err))
 		http.Error(w, "Error listing persons", http.StatusInternalServerError)
 
 		// Call gRPC logging method
 		// Only keep the latest log entry
 		buf.Reset()
 		// Write log to the buffer
-		logger.Printf("error calling ListPersons: %v", err)
+		logger.Printf("error calling ListPersons: %v", handleRpcError(err))
 		SendLogMessage(
 			logger,
 			&buf,
@@ -386,4 +388,29 @@ func main() {
 	}()
 	// Prevent main from exiting
 	select {}
+}
+
+func handleRpcError(err error) error {
+	st, ok := status.FromError(err)
+	if !ok {
+		return fmt.Errorf("non-gRPC error: %v", err)
+	}
+
+	switch st.Code() {
+
+	case codes.DeadlineExceeded:
+		return fmt.Errorf("timeout, server did not respond")
+
+	case codes.Unavailable:
+		return fmt.Errorf("server unavailable or broken connection")
+
+	case codes.InvalidArgument:
+		return fmt.Errorf("bad client request: %v", st.Message())
+
+	case codes.Internal:
+		return fmt.Errorf("server internal error: %v", st.Message())
+
+	default:
+		return fmt.Errorf("gRPC error [%s]: %s", st.Code(), st.Message())
+	}
 }
