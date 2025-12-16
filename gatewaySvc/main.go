@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"time"
 
 	loggingpb "microservice/template/logpb"
@@ -25,8 +26,14 @@ import (
 
 var persistenceClient pb.PersistenceServiceClient
 var logClient loggingpb.LogServiceClient
-var buf bytes.Buffer
-var logger = log.New(&buf, "", log.LstdFlags|log.Lshortfile)
+
+func getCaller(skip int) string {
+	_, file, line, ok := runtime.Caller(skip)
+	if !ok {
+		return "unknown:0"
+	}
+	return fmt.Sprintf("%s:%d", filepath.Base(file), line)
+}
 
 func handleGetPerson(w http.ResponseWriter, r *http.Request) {
 	req := &pb.GetPersonRequest{}
@@ -35,13 +42,7 @@ func handleGetPerson(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 
 		// Call gRPC logging method
-		// Only keep the latest log entry
-		buf.Reset()
-		// Write log to the buffer
-		logger.Println("Invalid request body", http.StatusBadRequest)
 		SendLogMessage(
-			logger,
-			&buf,
 			"ERROR",
 			fmt.Sprintln("Invalid request body", http.StatusBadRequest),
 		)
@@ -58,13 +59,7 @@ func handleGetPerson(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error fetching person", http.StatusInternalServerError)
 
 		// Call gRPC logging method
-		// Only keep the latest log entry
-		buf.Reset()
-		// Write log to the buffer
-		logger.Printf("error calling GetPerson: %v", handleRpcError(err))
 		SendLogMessage(
-			logger,
-			&buf,
 			"ERROR",
 			fmt.Sprintln("Error fetching person", http.StatusInternalServerError),
 		)
@@ -83,13 +78,7 @@ func handlePostPerson(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 
 		// Call gRPC logging method
-		// Only keep the latest log entry
-		buf.Reset()
-		// Write log to the buffer
-		logger.Println("Invalid request body", http.StatusBadRequest)
 		SendLogMessage(
-			logger,
-			&buf,
 			"ERROR",
 			fmt.Sprintln("Invalid request body", http.StatusBadRequest),
 		)
@@ -106,13 +95,7 @@ func handlePostPerson(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error posting person", http.StatusInternalServerError)
 
 		// Call gRPC logging method
-		// Only keep the latest log entry
-		buf.Reset()
-		// Write log to the buffer
-		logger.Printf("error calling PostPerson: %v", handleRpcError(err))
 		SendLogMessage(
-			logger,
-			&buf,
 			"ERROR",
 			fmt.Sprintln("Error posting person", http.StatusInternalServerError),
 		)
@@ -135,13 +118,7 @@ func handleProfiles(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 
 		// Call gRPC logging method
-		// Only keep the latest log entry
-		buf.Reset()
-		// Write log to the buffer
-		logger.Println("Method not allowed", http.StatusMethodNotAllowed)
 		SendLogMessage(
-			logger,
-			&buf,
 			"ERROR",
 			fmt.Sprintln("Method not allowed", http.StatusMethodNotAllowed),
 		)
@@ -154,13 +131,7 @@ func handleListProfiles(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 
 		// Call gRPC logging method
-		// Only keep the latest log entry
-		buf.Reset()
-		// Write log to the buffer
-		logger.Println("Method not allowed", http.StatusMethodNotAllowed)
 		SendLogMessage(
-			logger,
-			&buf,
 			"ERROR",
 			fmt.Sprintln("Method not allowed", http.StatusMethodNotAllowed),
 		)
@@ -176,13 +147,7 @@ func handleListProfiles(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error listing persons", http.StatusInternalServerError)
 
 		// Call gRPC logging method
-		// Only keep the latest log entry
-		buf.Reset()
-		// Write log to the buffer
-		logger.Printf("error calling ListPersons: %v", handleRpcError(err))
 		SendLogMessage(
-			logger,
-			&buf,
 			"ERROR",
 			fmt.Sprintln("Error listing persons", http.StatusInternalServerError),
 		)
@@ -200,13 +165,7 @@ func handleListProfiles(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, fmt.Sprintf("error receiving from stream: %v", err), http.StatusInternalServerError)
 
 			// Call gRPC logging method
-			// Only keep the latest log entry
-			buf.Reset()
-			// Write log to the buffer
-			logger.Printf("error receiving from stream: %v", err)
 			SendLogMessage(
-				logger,
-				&buf,
 				"ERROR",
 				fmt.Sprintf("error receiving from stream: %v, %v", err, http.StatusInternalServerError),
 			)
@@ -220,13 +179,7 @@ func handleListProfiles(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error marshalling response", http.StatusInternalServerError)
 
 		// Call gRPC logging method
-		// Only keep the latest log entry
-		buf.Reset()
-		// Write log to the buffer
-		logger.Println("Error marshalling response", http.StatusInternalServerError)
 		SendLogMessage(
-			logger,
-			&buf,
 			"ERROR",
 			fmt.Sprintln("Error marshalling response", http.StatusInternalServerError),
 		)
@@ -243,13 +196,7 @@ func firstPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 
 		// Call gRPC logging method
-		// Only keep the latest log entry
-		buf.Reset()
-		// Write log to the buffer
-		logger.Println("firstPage: method not allowed", http.StatusMethodNotAllowed)
 		SendLogMessage(
-			logger,
-			&buf,
 			"ERROR",
 			fmt.Sprintln("firstPage: method not allowed", http.StatusMethodNotAllowed),
 		)
@@ -264,8 +211,6 @@ func firstPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func SendLogMessage(
-	logger *log.Logger,
-	buf *bytes.Buffer,
 	level string,
 	message string,
 ) error {
@@ -273,8 +218,7 @@ func SendLogMessage(
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	// Extract stack trace from buffer
-	stackTrace := buf.String()
+	stackTrace := getCaller(2)
 
 	// Send log via gRPC
 	_, err := logClient.LogEvent(ctx, &loggingpb.LogEventRequest{
