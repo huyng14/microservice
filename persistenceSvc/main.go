@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net"
 	"time"
 
+	"microservice/httpServerSvc"
 	"microservice/models"
 
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/keepalive"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -155,33 +155,64 @@ func main() {
 		log.Fatal("Failed to initialize MongoDB:", err)
 	}
 
-	// ==== Keepalive parameters ====
-	var kaPolicy = keepalive.EnforcementPolicy{
-		MinTime:             5 * time.Second, // Min time between pings from client
-		PermitWithoutStream: true,            // Allow keepalive pings even with no RPCs
-	}
+	// // ==== Keepalive parameters ====
+	// var kaPolicy = keepalive.EnforcementPolicy{
+	// 	MinTime:             5 * time.Second, // Min time between pings from client
+	// 	PermitWithoutStream: true,            // Allow keepalive pings even with no RPCs
+	// }
 
-	var kaParams = keepalive.ServerParameters{
-		Time:                  10 * time.Second, // Ping clients every 10 seconds
-		Timeout:               3 * time.Second,  // Disconnect if no pong within 3 seconds
-		MaxConnectionIdle:     30 * time.Second, // Disconnect idle connections
-		MaxConnectionAge:      2 * time.Minute,  // Force reconnect every 2 minutes
-		MaxConnectionAgeGrace: 10 * time.Second, // Extra time after age expiration
-	}
+	// var kaParams = keepalive.ServerParameters{
+	// 	Time:                  10 * time.Second, // Ping clients every 10 seconds
+	// 	Timeout:               3 * time.Second,  // Disconnect if no pong within 3 seconds
+	// 	MaxConnectionIdle:     30 * time.Second, // Disconnect idle connections
+	// 	MaxConnectionAge:      2 * time.Minute,  // Force reconnect every 2 minutes
+	// 	MaxConnectionAgeGrace: 10 * time.Second, // Extra time after age expiration
+	// }
 
-	lis, err := net.Listen("tcp", ":9000")
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
+	// lis, err := net.Listen("tcp", ":9000")
+	// if err != nil {
+	// 	log.Fatalf("failed to listen: %v", err)
+	// }
 
-	grpcServer := grpc.NewServer(
-		grpc.KeepaliveEnforcementPolicy(kaPolicy),
-		grpc.KeepaliveParams(kaParams),
-	)
-	pb.RegisterPersistenceServiceServer(grpcServer, &PersistenceServer{})
+	// grpcServer := grpc.NewServer(
+	// 	grpc.KeepaliveEnforcementPolicy(kaPolicy),
+	// 	grpc.KeepaliveParams(kaParams),
+	// )
+	// pb.RegisterPersistenceServiceServer(grpcServer, &PersistenceServer{})
 
-	log.Println("Persistence Service gRPC server running at port 9000...")
-	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
-	}
+	// log.Println("Persistence Service gRPC server running at port 9000...")
+	// if err := grpcServer.Serve(lis); err != nil {
+	// 	log.Fatalf("failed to serve: %v", err)
+	// }
+
+	httpServer()
+}
+
+func httpServer() {
+	// r := svc
+	r := gin.Default()
+	// create gin context and pass to HttpSvc struct
+	svc := &httpServerSvc.HttpSvc{}
+
+	log.Println("Starting HTTP server on :9000")
+	// Enable CORS so Vue (port 5173) can call Go (port 9000)
+	r.Use(cors.New(cors.Config{
+		AllowOrigins: []string{"http://localhost:5173"},
+		AllowMethods: []string{"GET", "POST"},
+		AllowHeaders: []string{"Content-Type"},
+	}))
+
+	// Simple API endpoint
+	r.GET("/api/hello", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "Hello from Go backend 🚀",
+		})
+	})
+
+	r.GET("/profiles/:id", svc.HandleGetPerson)
+	r.GET("/listprofiles", svc.HandleListProfiles)
+	r.POST("/profile", svc.HandleCreateProfile)
+	r.PUT("/profile/:id", svc.HandleUpdateProfile)
+
+	r.Run(":9000") // Run API on port 9000
 }
