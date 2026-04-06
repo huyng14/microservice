@@ -8,6 +8,7 @@ import (
 
 	"microservice/httpServerSvc"
 	"microservice/models"
+	mongodb "microservice/mongoDB"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -155,6 +156,9 @@ func main() {
 		log.Fatal("Failed to initialize MongoDB:", err)
 	}
 
+	mongoSvc := &mongodb.MongoSvc{Client: Client}
+	httpSvc := &httpServerSvc.HttpSvc{MongoSvc: mongoSvc}
+
 	// // ==== Keepalive parameters ====
 	// var kaPolicy = keepalive.EnforcementPolicy{
 	// 	MinTime:             5 * time.Second, // Min time between pings from client
@@ -185,14 +189,15 @@ func main() {
 	// 	log.Fatalf("failed to serve: %v", err)
 	// }
 
-	httpServer()
+	httpServer(httpSvc)
 }
 
-func httpServer() {
-	// r := svc
+func httpServer(svc *httpServerSvc.HttpSvc) {
 	r := gin.Default()
-	// create gin context and pass to HttpSvc struct
-	svc := &httpServerSvc.HttpSvc{}
+
+	// Pass to HttpSvc struct
+	collection := Client.Database("microservice").Collection("curriculumVitaes")
+	svc.MongoCollection = collection
 
 	log.Println("Starting HTTP server on :9000")
 	// Enable CORS so Vue (port 5173) can call Go (port 9000)
