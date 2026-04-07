@@ -151,6 +151,7 @@ func (s *PersistenceServer) Ping(ctx context.Context, req *pb.PingRequest) (*pb.
 }
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	err := InitMongo("mongodb+srv://skylab:skylab@consultatantaimatch.ftecqos.mongodb.net/")
 	if err != nil {
 		log.Fatal("Failed to initialize MongoDB:", err)
@@ -203,7 +204,7 @@ func httpServer(svc *httpServerSvc.HttpSvc) {
 	// Enable CORS so Vue (port 5173) can call Go (port 9000)
 	r.Use(cors.New(cors.Config{
 		AllowOrigins: []string{"http://localhost:5173"},
-		AllowMethods: []string{"GET", "POST"},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE"},
 		AllowHeaders: []string{"Content-Type"},
 	}))
 

@@ -14,6 +14,9 @@ type HttpSvc struct {
 	MongoSvc        *mongodb.MongoSvc
 }
 
+const databaseName = "project"
+const collectionName = "consultants"
+
 func (s *HttpSvc) HandleGetPerson(c *gin.Context) {
 	id := c.Param("id")
 	var profile models.Profile
@@ -98,7 +101,7 @@ func (s *HttpSvc) HandleGetPerson(c *gin.Context) {
 
 func (s *HttpSvc) HandleListProfiles(c *gin.Context) {
 	profiles := []models.Profile{}
-	profiles, err := s.MongoSvc.ListAllCVs("project", "consultants")
+	profiles, err := s.MongoSvc.ListAllCVs(databaseName, collectionName)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
@@ -112,11 +115,28 @@ func (s *HttpSvc) HandleCreateProfile(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	s.MongoSvc.InsertCV("project", "consultants", profile)
+	_, err := s.MongoSvc.InsertCV(databaseName, collectionName, profile)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(201, gin.H{
 		"message": "CV created successfully"})
 }
 
 func (s *HttpSvc) HandleUpdateProfile(c *gin.Context) {
+	var profile models.Profile
+	if err := c.ShouldBindJSON(&profile); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	profile.Id = c.Param("id")
 
+	err := s.MongoSvc.UpdateCV(databaseName, collectionName, profile)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{
+		"message": "CV updated successfully"})
 }

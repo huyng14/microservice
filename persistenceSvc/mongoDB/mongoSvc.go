@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -15,12 +16,9 @@ type MongoSvc struct {
 }
 
 func (s *MongoSvc) InsertUser(databaseName, collectionName string, person models.Person) (*mongo.InsertOneResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
 	collection := s.Client.Database(databaseName).Collection(collectionName)
 
-	result, err := collection.InsertOne(ctx, person)
+	result, err := collection.InsertOne(context.Background(), person)
 	if err != nil {
 		return nil, err
 	}
@@ -30,14 +28,12 @@ func (s *MongoSvc) InsertUser(databaseName, collectionName string, person models
 }
 
 func (s *MongoSvc) InsertCV(databaseName, collectionName string, cv models.Profile) (*mongo.InsertOneResult, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
 	collection := s.Client.Database(databaseName).Collection(collectionName)
+	cv.Id = primitive.NewObjectID().Hex()
 	cv.CreatedAt = time.Now()
 	cv.UpdatedAt = time.Now()
 
-	result, err := collection.InsertOne(ctx, cv)
+	result, err := collection.InsertOne(context.Background(), cv)
 	if err != nil {
 		return nil, err
 	}
@@ -47,23 +43,17 @@ func (s *MongoSvc) InsertCV(databaseName, collectionName string, cv models.Profi
 }
 
 func (s *MongoSvc) ListAllCVs(databaseName, collectionName string) ([]models.Profile, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
 	collection := s.Client.Database(databaseName).Collection(collectionName)
 
-	cursor, err := collection.Find(ctx, bson.M{})
+	cursor, err := collection.Find(context.Background(), bson.M{})
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer cursor.Close(context.Background())
 
 	var profiles []models.Profile
-	// if err = cursor.All(ctx, &profiles); err != nil {
-	// 	return nil, err
-	// }
 
-	for cursor.Next(ctx) {
+	for cursor.Next(context.Background()) {
 		var profile models.Profile
 		if err := cursor.Decode(&profile); err != nil {
 			return nil, err
@@ -76,4 +66,15 @@ func (s *MongoSvc) ListAllCVs(databaseName, collectionName string) ([]models.Pro
 	}
 
 	return profiles, nil
+}
+
+func (s *MongoSvc) UpdateCV(databaseName, collectionName string, profile models.Profile) error {
+	collection := s.Client.Database(databaseName).Collection(collectionName)
+
+	_, err := collection.ReplaceOne(context.Background(), bson.M{"id": profile.Id}, profile)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
