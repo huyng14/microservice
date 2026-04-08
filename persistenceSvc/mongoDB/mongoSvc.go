@@ -78,3 +78,14 @@ func (s *MongoSvc) UpdateCV(databaseName, collectionName string, profile models.
 
 	return nil
 }
+
+func (s *MongoSvc) DeleteCV(databaseName, collectionName string, id string) error {
+	collection := s.Client.Database(databaseName).Collection(collectionName)
+
+	_, err := collection.DeleteOne(context.Background(), bson.M{"id": id})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

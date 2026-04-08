@@ -219,6 +219,7 @@ func httpServer(svc *httpServerSvc.HttpSvc) {
 	r.GET("/listprofiles", svc.HandleListProfiles)
 	r.POST("/profile", svc.HandleCreateProfile)
 	r.PUT("/profile/:id", svc.HandleUpdateProfile)
+	r.DELETE("/profile/:id", svc.HandleDeleteProfile)
 
 	r.Run(":9000") // Run API on port 9000
 }

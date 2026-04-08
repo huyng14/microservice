@@ -140,3 +140,14 @@ func (s *HttpSvc) HandleUpdateProfile(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"message": "CV updated successfully"})
 }
+
+func (s *HttpSvc) HandleDeleteProfile(c *gin.Context) {
+	id := c.Param("id")
+	err := s.MongoSvc.DeleteCV(databaseName, collectionName, id)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{
+		"message": "CV deleted successfully"})
+}
