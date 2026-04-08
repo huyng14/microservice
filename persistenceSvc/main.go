@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"time"
 
 	"microservice/httpServerSvc"
@@ -15,6 +16,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -157,40 +160,48 @@ func main() {
 		log.Fatal("Failed to initialize MongoDB:", err)
 	}
 
+	// ==== Initialize services ====
 	mongoSvc := &mongodb.MongoSvc{Client: Client}
 	httpSvc := &httpServerSvc.HttpSvc{MongoSvc: mongoSvc}
 
-	// // ==== Keepalive parameters ====
-	// var kaPolicy = keepalive.EnforcementPolicy{
-	// 	MinTime:             5 * time.Second, // Min time between pings from client
-	// 	PermitWithoutStream: true,            // Allow keepalive pings even with no RPCs
-	// }
+	// ==== Keepalive parameters ====
+	var kaPolicy = keepalive.EnforcementPolicy{
+		MinTime:             5 * time.Second, // Min time between pings from client
+		PermitWithoutStream: true,            // Allow keepalive pings even with no RPCs
+	}
 
-	// var kaParams = keepalive.ServerParameters{
-	// 	Time:                  10 * time.Second, // Ping clients every 10 seconds
-	// 	Timeout:               3 * time.Second,  // Disconnect if no pong within 3 seconds
-	// 	MaxConnectionIdle:     30 * time.Second, // Disconnect idle connections
-	// 	MaxConnectionAge:      2 * time.Minute,  // Force reconnect every 2 minutes
-	// 	MaxConnectionAgeGrace: 10 * time.Second, // Extra time after age expiration
-	// }
+	var kaParams = keepalive.ServerParameters{
+		Time:                  10 * time.Second, // Ping clients every 10 seconds
+		Timeout:               3 * time.Second,  // Disconnect if no pong within 3 seconds
+		MaxConnectionIdle:     30 * time.Second, // Disconnect idle connections
+		MaxConnectionAge:      2 * time.Minute,  // Force reconnect every 2 minutes
+		MaxConnectionAgeGrace: 10 * time.Second, // Extra time after age expiration
+	}
 
-	// lis, err := net.Listen("tcp", ":9000")
-	// if err != nil {
-	// 	log.Fatalf("failed to listen: %v", err)
-	// }
+	// Start gRPC server in a separate goroutine
+	go func() {
+		log.Println("Starting gRPC server for Persistence Service")
+		lis, err := net.Listen("tcp", ":9010")
+		if err != nil {
+			log.Fatalf("failed to listen: %v", err)
+		}
 
-	// grpcServer := grpc.NewServer(
-	// 	grpc.KeepaliveEnforcementPolicy(kaPolicy),
-	// 	grpc.KeepaliveParams(kaParams),
-	// )
-	// pb.RegisterPersistenceServiceServer(grpcServer, &PersistenceServer{})
+		grpcServer := grpc.NewServer(
+			grpc.KeepaliveEnforcementPolicy(kaPolicy),
+			grpc.KeepaliveParams(kaParams),
+		)
+		pb.RegisterPersistenceServiceServer(grpcServer, &PersistenceServer{})
 
-	// log.Println("Persistence Service gRPC server running at port 9000...")
-	// if err := grpcServer.Serve(lis); err != nil {
-	// 	log.Fatalf("failed to serve: %v", err)
-	// }
+		log.Println("Persistence Service gRPC server running at port 9000...")
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
+	}()
 
-	httpServer(httpSvc)
+	// Start HTTP server (blocking call)
+	go httpServer(httpSvc)
+	// Prevent main from exiting
+	select {}
 }
 
 func httpServer(svc *httpServerSvc.HttpSvc) {
