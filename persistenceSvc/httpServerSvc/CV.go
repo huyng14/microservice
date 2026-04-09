@@ -6,12 +6,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type HttpSvc struct {
-	MongoCollection *mongo.Collection
-	MongoSvc        *mongodb.MongoSvc
+	MongoSvc *mongodb.MongoSvc
 }
 
 const databaseName = "project"

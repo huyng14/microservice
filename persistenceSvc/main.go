@@ -207,10 +207,6 @@ func main() {
 func httpServer(svc *httpServerSvc.HttpSvc) {
 	r := gin.Default()
 
-	// Pass to HttpSvc struct
-	collection := Client.Database("microservice").Collection("curriculumVitaes")
-	svc.MongoCollection = collection
-
 	log.Println("Starting HTTP server on :9000")
 	// Enable CORS so Vue (port 5173) can call Go (port 9000)
 	r.Use(cors.New(cors.Config{
@@ -231,6 +227,11 @@ func httpServer(svc *httpServerSvc.HttpSvc) {
 	r.POST("/profile", svc.HandleCreateProfile)
 	r.PUT("/profile/:id", svc.HandleUpdateProfile)
 	r.DELETE("/profile/:id", svc.HandleDeleteProfile)
+
+	// ==== Job endpoints ====
+	r.GET("/listjobs", svc.HandleListJobs)
+	r.POST("/job", svc.HandleCreateJob)
+	r.DELETE("/job/:id", svc.HandleDeleteJob)
 
 	r.Run(":9000") // Run API on port 9000
 }
