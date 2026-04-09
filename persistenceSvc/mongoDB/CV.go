@@ -71,7 +71,18 @@ func (s *MongoSvc) ListAllCVs(databaseName, collectionName string) ([]models.Pro
 func (s *MongoSvc) UpdateCV(databaseName, collectionName string, profile models.Profile) error {
 	collection := s.Client.Database(databaseName).Collection(collectionName)
 
-	_, err := collection.ReplaceOne(context.Background(), bson.M{"id": profile.Id}, profile)
+	// Fetch the existing profile to preserve createdAt
+	var existingProfile models.Profile
+	err := collection.FindOne(context.Background(), bson.M{"id": profile.Id}).Decode(&existingProfile)
+	if err != nil {
+		return err
+	}
+
+	// Preserve createdAt and update updatedAt
+	profile.CreatedAt = existingProfile.CreatedAt
+	profile.UpdatedAt = time.Now()
+
+	_, err = collection.ReplaceOne(context.Background(), bson.M{"id": profile.Id}, profile)
 	if err != nil {
 		return err
 	}

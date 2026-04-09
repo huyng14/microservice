@@ -64,3 +64,25 @@ func (s *MongoSvc) DeleteJob(databaseName, collectionName, id string) error {
 	}
 	return nil
 }
+
+func (s *MongoSvc) UpdateJob(databaseName, collectionName string, job models.Job) error {
+	collection := s.Client.Database(databaseName).Collection(collectionName)
+
+	// Fetch the existing job to preserve createdAt
+	var existingJob models.Job
+	err := collection.FindOne(context.Background(), bson.M{"id": job.Id}).Decode(&existingJob)
+	if err != nil {
+		return err
+	}
+
+	// Preserve createdAt and update updatedAt
+	job.CreatedAt = existingJob.CreatedAt
+	job.UpdatedAt = time.Now()
+
+	_, err = collection.ReplaceOne(context.Background(), bson.M{"id": job.Id}, job)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

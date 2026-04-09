@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 const jobDatabaseName = "project"
@@ -34,24 +35,14 @@ func (s *HttpSvc) HandleDeleteJob(c *gin.Context) {
 
 func (s *HttpSvc) HandleCreateJob(c *gin.Context) {
 	var job models.Job
-	// if err := c.ShouldBindJSON(&job); err != nil {
-	// 	c.JSON(400, gin.H{"error": err.Error()})
-	// 	return
-	// }
-	job = models.Job{
-		Id:               "1",
-		Title:            "Senior React Developer",
-		Company:          "Innovation Labs",
-		Location:         "San Francisco, CA (Remote)",
-		Type:             "Full-time",
-		Description:      "We are looking for an experienced React developer to join our team and help build the next generation of our product.",
-		Requirements:     []string{"5+ years React experience", "TypeScript", "Node.js", "AWS", "GraphQL", "Team leadership"},
-		Responsibilities: []string{"Lead frontend development", "Mentor junior developers", "Architecture decisions", "Code reviews"},
-		Salary:           "$140,000 - $180,000",
-		CreatedAt:        time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
-		UpdatedAt:        time.Date(2026, 3, 5, 0, 0, 0, 0, time.UTC),
+	if err := c.ShouldBindJSON(&job); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
 	}
 
+	job.Id = primitive.NewObjectID().Hex()
+	job.CreatedAt = time.Now()
+	job.UpdatedAt = time.Now()
 	result, err := s.MongoSvc.InsertJob(jobDatabaseName, jobCollectionName, job)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
@@ -62,4 +53,21 @@ func (s *HttpSvc) HandleCreateJob(c *gin.Context) {
 		"message": "Job created successfully",
 		"id":      fmt.Sprint(result.InsertedID),
 	})
+}
+
+func (s *HttpSvc) HandleUpdateJob(c *gin.Context) {
+	var job models.Job
+	if err := c.ShouldBindJSON(&job); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	job.Id = c.Param("id")
+
+	err := s.MongoSvc.UpdateJob(jobDatabaseName, jobCollectionName, job)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{
+		"message": "Job updated successfully"})
 }
