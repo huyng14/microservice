@@ -7,8 +7,8 @@ from bson.objectid import ObjectId
 from sklearn.metrics.pairwise import cosine_similarity
 from google import genai
 
-client = genai.Client(api_key='AIzaSyDPgke6ZC8L827jKsHKMO2xuc1RpdkoOZU')
-mongo_uri = "mongodb+srv://skylab:skylab@consultatantaimatch.ftecqos.mongodb.net/"
+client = genai.Client(api_key='Change to your API key')
+mongo_uri = "change to your MongoDB URI"
 
 def find_objectID_from_database(db_name, collection_name, object_id):
     try:
