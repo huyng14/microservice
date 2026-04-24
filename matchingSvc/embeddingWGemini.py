@@ -2,6 +2,8 @@ from google import genai
 from google.genai import types
 import numpy as np
 import logging
+import os
+from dotenv import load_dotenv
 
 from pymongo import MongoClient
 from bson.binary import Binary
@@ -13,8 +15,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-client = genai.Client(api_key='AIzaSyDPgke6ZC8L827jKsHKMO2xuc1RpdkoOZU')
-mongo_uri = "mongodb+srv://skylab:skylab@consultatantaimatch.ftecqos.mongodb.net/"
+# Load environment variables from .env file
+load_dotenv()
+
+GENAI_API_KEY = os.environ.get("GENAI_API_KEY")
+MONGO_URI = os.environ.get("MONGO_URI")
+
+client = genai.Client(api_key=GENAI_API_KEY)
+mongo_uri = MONGO_URI
 
 def read_from_database(db_name, collection_name):
     # mongo_uri = "mongodb+srv://skylab:skylab@consultatantaimatch.ftecqos.mongodb.net/"
