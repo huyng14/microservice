@@ -1,4 +1,3 @@
-import time
 import logging
 
 from flask import Flask, jsonify, request
@@ -18,7 +17,7 @@ logging.basicConfig(
     level=logging.DEBUG,
     format='[DEBUG] %(filename)s:%(lineno)d - %(message)s'
 )
-logging.disable(logging.CRITICAL)  # Disable all logging
+logging.disable(logging.DEBUG)  # Disable all DEBUG logs
 logger = logging.getLogger(__name__)
 
 
@@ -147,21 +146,21 @@ def get_matched_score(consultant_id=None, assignment_id=None, explain=False, dat
                   collection_consultants="consultants", collection_assignments="jobs"):
     if not consultant_id or not assignment_id:
         error_msg = "Error: Please provide both consultant_id and assignment_id"
-        print(error_msg)
+        logger.error(error_msg)
         return {"error": error_msg, "response": None}
     try:
-        print(f"\nCalculating similarity score between consultant {consultant_id} and assignment {assignment_id}...")
+        logger.info(f"\nCalculating similarity score between consultant {consultant_id} and assignment {assignment_id}...")
         consultant = find_ID_from_database(database, collection_consultants, consultant_id)
         assignment = find_ID_from_database(database, collection_assignments, assignment_id)
         
         if not consultant:
             error_msg = f"Consultant {consultant_id} not found in database."
-            print(error_msg)
+            logger.error(error_msg)
             return {"error": error_msg, "response": None}
         
         if not assignment:
             error_msg = f"Assignment {assignment_id} not found in database."
-            print(error_msg)
+            logger.error(error_msg)
             return {"error": error_msg, "response": None}
         
         response = compare_1consultant_with_1assignment_and_explain(consultant_id, assignment_id, explain=explain, 
@@ -179,7 +178,7 @@ def get_matched_score(consultant_id=None, assignment_id=None, explain=False, dat
     
     except Exception as e:
         error_msg = f"Exception in get_matched_score: {str(e)}"
-        logger.debug(error_msg)
+        logger.error(error_msg)
         return {"error": error_msg, "response": None}
 
 @app.route('/matching/<consultant_id>', methods=['POST'])
@@ -214,5 +213,5 @@ if __name__ == '__main__':
     else:
         logger.debug(f"\n✗ Embedding phase failed: {embed_result['status']}")
 
-    print('Matching Service running on http://0.0.0.0:9020')
+    logger.info('Matching Service running on http://0.0.0.0:9020')
     app.run(host='0.0.0.0', port=9020)

@@ -25,7 +25,6 @@ client = genai.Client(api_key=GENAI_API_KEY)
 mongo_uri = MONGO_URI
 
 def read_from_database(db_name, collection_name):
-    # mongo_uri = "mongodb+srv://skylab:skylab@consultatantaimatch.ftecqos.mongodb.net/"
     try:
         client_mongo = MongoClient(mongo_uri)
         db = client_mongo[db_name]
@@ -66,9 +65,9 @@ def update_embedding_in_database(db_name, collection_name, document_id, input_da
 def work_exp_embedding_models(database_name="project", collection_name="consultants"):
     resume = read_from_database(database_name, collection_name)
     for doc in resume:
-        logger.info(f"doc _id is {doc['_id']}")
-        logger.info(f"doc Name is {doc['name']}")
-        logger.info(f"type of doc Work Experience is {type(doc['experience'])} - is None: {doc['experience'] is None}")
+        # logger.info(f"doc _id is {doc['_id']}")
+        # logger.info(f"doc Name is {doc['name']}")
+        # logger.info(f"type of doc Work Experience is {type(doc['experience'])} - is None: {doc['experience'] is None}")
         
         if "experience_embedding" not in doc and doc["experience"] is not None and len(doc["experience"]) > 0:
         # work_experience_embedding does not exist, generating...
@@ -95,8 +94,8 @@ def work_exp_embedding_models(database_name="project", collection_name="consulta
 def assignment_desc_embedding_models(database_name="project", collection_name="assignments"):
     assignments = read_from_database(database_name, collection_name)
     for doc in assignments:
-        logger.info(f"doc _id is {doc['_id']}")
-        logger.info(f"type of doc Description is {type(doc['description'])} - is None: {doc['description'] is None}")
+        # logger.info(f"doc _id is {doc['_id']}")
+        # logger.info(f"type of doc Description is {type(doc['description'])} - is None: {doc['description'] is None}")
         
         if "description_embedding" not in doc and doc["description"] is not None and len(doc["description"]) > 0:
             # description_embedding does not exist, generating...
@@ -105,7 +104,7 @@ def assignment_desc_embedding_models(database_name="project", collection_name="a
                 contents=str(doc["description"]))
                 # config=types.EmbedContentConfig(task_type="SEMANTIC_SIMILARITY")).embeddings
 
-            logger.info(f"result.embeddings type is {type(result.embeddings)}, len = {len(result.embeddings)}")
+            # logger.info(f"result.embeddings type is {type(result.embeddings)}, len = {len(result.embeddings)}")
             for e in result.embeddings:
                 logger.info(f"e values type is {type(e.values)}, len = {len(e.values)}")
                 update_embedding_in_database(
