@@ -210,7 +210,7 @@ func httpServer(svc *httpServerSvc.HttpSvc) {
 	log.Println("Starting HTTP server on :9000")
 	// Enable CORS so Vue (port 5173) can call Go (port 9000)
 	r.Use(cors.New(cors.Config{
-		AllowOrigins: []string{"http://localhost:5173"},
+		AllowOrigins: []string{"https://s3-demo-web-497559249788-ap-southeast-1-an.s3.ap-southeast-1.amazonaws.com"},
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE"},
 		AllowHeaders: []string{"Content-Type"},
 	}))

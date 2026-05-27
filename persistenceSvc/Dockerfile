@@ -37,4 +37,4 @@ COPY --from=builder /app/persistence /app/persistence
 EXPOSE 9000
 
 # Start persistence service
-CMD ["/app/persistence"]
+ENTRYPOINT ["/app/persistence"]
