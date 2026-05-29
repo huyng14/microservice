@@ -5,19 +5,18 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install system build deps required by some Python packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    gcc \
-    libffi-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Python dependencies (uses requirements.txt)
+# Copy requirements first to leverage Docker layer caching
 COPY requirements.txt /app/requirements.txt
-RUN pip install --upgrade pip setuptools wheel
-RUN pip install -r /app/requirements.txt
 
-# Copy application source
+# Install build deps, install Python packages without cache, then remove build deps and apt lists
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential gcc libffi-dev \
+    && pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir -r /app/requirements.txt \
+    && apt-get purge -y --auto-remove build-essential gcc libffi-dev \
+    && rm -rf /var/lib/apt/lists/* /root/.cache/pip
+
+# Copy application source (after installing deps to keep cacheable layer)
 COPY . /app
 
 EXPOSE 9020

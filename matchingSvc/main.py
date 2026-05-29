@@ -13,7 +13,7 @@ from comparing_vector import ( compare_1consultant_with_1assignment_and_explain,
 app = Flask(__name__)
 # Enable CORS only for specified origins
 CORS(app, resources={r"/*": {"origins": [
-    "http://s3-demo-web-497559249788-ap-southeast-1-an.s3.ap-southeast-1.amazonaws.com",
+    "http://s3-demo-web-497559249788-ap-southeast-1-an.s3-website-ap-southeast-1.amazonaws.com",
     "http://localhost:5173"
 ]}})
 # Configure logging with line numbers
