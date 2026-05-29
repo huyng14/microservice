@@ -11,7 +11,11 @@ from comparing_vector import ( compare_1consultant_with_1assignment_and_explain,
                                 generate_explanation_toConsultant, generate_explanation_toHiring_manager)
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+# Enable CORS only for specified origins
+CORS(app, resources={r"/*": {"origins": [
+    "http://s3-demo-web-497559249788-ap-southeast-1-an.s3.ap-southeast-1.amazonaws.com",
+    "http://localhost:5173"
+]}})
 # Configure logging with line numbers
 logging.basicConfig(
     level=logging.DEBUG,
@@ -119,6 +123,12 @@ def matching(consultant_id):
         'error': None,
         'response': compare_result['response']
     }), 200
+
+
+# Health check route
+@app.route('/', methods=['GET'])
+def health_check():
+    return jsonify({"status": "ok"}), 200
 
 if __name__ == '__main__':
     embed_result = embed_phase("project", "consultants", "jobs")
