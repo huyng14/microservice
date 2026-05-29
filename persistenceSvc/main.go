@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net"
 	"time"
 
 	"microservice/httpServerSvc"
@@ -16,8 +15,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/keepalive"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -164,39 +161,39 @@ func main() {
 	mongoSvc := &mongodb.MongoSvc{Client: Client}
 	httpSvc := &httpServerSvc.HttpSvc{MongoSvc: mongoSvc}
 
-	// ==== Keepalive parameters ====
-	var kaPolicy = keepalive.EnforcementPolicy{
-		MinTime:             5 * time.Second, // Min time between pings from client
-		PermitWithoutStream: true,            // Allow keepalive pings even with no RPCs
-	}
+	// // ==== Keepalive parameters ====
+	// var kaPolicy = keepalive.EnforcementPolicy{
+	// 	MinTime:             5 * time.Second, // Min time between pings from client
+	// 	PermitWithoutStream: true,            // Allow keepalive pings even with no RPCs
+	// }
 
-	var kaParams = keepalive.ServerParameters{
-		Time:                  10 * time.Second, // Ping clients every 10 seconds
-		Timeout:               3 * time.Second,  // Disconnect if no pong within 3 seconds
-		MaxConnectionIdle:     30 * time.Second, // Disconnect idle connections
-		MaxConnectionAge:      2 * time.Minute,  // Force reconnect every 2 minutes
-		MaxConnectionAgeGrace: 10 * time.Second, // Extra time after age expiration
-	}
+	// var kaParams = keepalive.ServerParameters{
+	// 	Time:                  10 * time.Second, // Ping clients every 10 seconds
+	// 	Timeout:               3 * time.Second,  // Disconnect if no pong within 3 seconds
+	// 	MaxConnectionIdle:     30 * time.Second, // Disconnect idle connections
+	// 	MaxConnectionAge:      2 * time.Minute,  // Force reconnect every 2 minutes
+	// 	MaxConnectionAgeGrace: 10 * time.Second, // Extra time after age expiration
+	// }
 
 	// Start gRPC server in a separate goroutine
-	go func() {
-		log.Println("Starting gRPC server for Persistence Service")
-		lis, err := net.Listen("tcp", ":9010")
-		if err != nil {
-			log.Fatalf("failed to listen: %v", err)
-		}
+	// go func() {
+	// 	log.Println("Starting gRPC server for Persistence Service")
+	// 	lis, err := net.Listen("tcp", ":9010")
+	// 	if err != nil {
+	// 		log.Fatalf("failed to listen: %v", err)
+	// 	}
 
-		grpcServer := grpc.NewServer(
-			grpc.KeepaliveEnforcementPolicy(kaPolicy),
-			grpc.KeepaliveParams(kaParams),
-		)
-		pb.RegisterPersistenceServiceServer(grpcServer, &PersistenceServer{})
+	// 	grpcServer := grpc.NewServer(
+	// 		grpc.KeepaliveEnforcementPolicy(kaPolicy),
+	// 		grpc.KeepaliveParams(kaParams),
+	// 	)
+	// 	pb.RegisterPersistenceServiceServer(grpcServer, &PersistenceServer{})
 
-		log.Println("Persistence Service gRPC server running at port 9000...")
-		if err := grpcServer.Serve(lis); err != nil {
-			log.Fatalf("failed to serve: %v", err)
-		}
-	}()
+	// 	log.Println("Persistence Service gRPC server running at port 9000...")
+	// 	if err := grpcServer.Serve(lis); err != nil {
+	// 		log.Fatalf("failed to serve: %v", err)
+	// 	}
+	// }()
 
 	// Start HTTP server (blocking call)
 	go httpServer(httpSvc)
@@ -210,7 +207,8 @@ func httpServer(svc *httpServerSvc.HttpSvc) {
 	log.Println("Starting HTTP server on :9000")
 	// Enable CORS so Vue (port 5173) can call Go (port 9000)
 	r.Use(cors.New(cors.Config{
-		AllowOrigins: []string{"https://s3-demo-web-497559249788-ap-southeast-1-an.s3.ap-southeast-1.amazonaws.com"},
+		AllowOrigins: []string{"http://s3-demo-web-497559249788-ap-southeast-1-an.s3.ap-southeast-1.amazonaws.com",
+			"http://localhost:5173"},
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE"},
 		AllowHeaders: []string{"Content-Type"},
 	}))
@@ -219,6 +217,11 @@ func httpServer(svc *httpServerSvc.HttpSvc) {
 	r.GET("/api/hello", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"message": "Hello from Go backend 🚀",
+		})
+	})
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status": "ok",
 		})
 	})
 
@@ -234,5 +237,5 @@ func httpServer(svc *httpServerSvc.HttpSvc) {
 	r.DELETE("/job/:id", svc.HandleDeleteJob)
 	r.PUT("/job/:id", svc.HandleUpdateJob)
 
-	r.Run(":9000") // Run API on port 9000
+	r.Run("0.0.0.0:9000") // Run API on port 9000
 }
