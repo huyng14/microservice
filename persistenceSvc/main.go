@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	"microservice/httpServerSvc"
@@ -152,7 +154,13 @@ func (s *PersistenceServer) Ping(ctx context.Context, req *pb.PingRequest) (*pb.
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	err := InitMongo("mongodb+srv://skylab:skylab@consultatantaimatch.ftecqos.mongodb.net/")
+	mongoURI := os.Getenv("MONGO_URI")
+	if mongoURI == "" {
+		log.Println("MONGO_URI not set; using default MongoDB connection string")
+		mongoURI = "mongodb+srv://skylab:skylab@consultatantaimatch.ftecqos.mongodb.net/"
+	}
+
+	err := InitMongo(mongoURI)
 	if err != nil {
 		log.Fatal("Failed to initialize MongoDB:", err)
 	}
@@ -206,12 +214,29 @@ func httpServer(svc *httpServerSvc.HttpSvc) {
 
 	log.Println("Starting HTTP server on :9000")
 	// Enable CORS so Vue (port 5173) can call Go (port 9000)
-	r.Use(cors.New(cors.Config{
-		AllowOrigins: []string{"http://s3-demo-web-497559249788-ap-southeast-1-an.s3-website-ap-southeast-1.amazonaws.com",
-			"http://localhost:5173"},
+	cfg := cors.Config{
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders: []string{"Content-Type"},
-	}))
+	}
+
+	// Read allowed origins from env var CORS_ALLOW_ORIGINS (comma-separated).
+	// Use "*" to allow all origins (sets AllowAllOrigins=true).
+	originsEnv := os.Getenv("CORS_ALLOW_ORIGINS")
+	if originsEnv == "*" {
+		cfg.AllowAllOrigins = true
+	} else if originsEnv == "" {
+		// fallback default used previously
+		cfg.AllowOrigins = []string{"http://s3-demo-web-497559249788-ap-southeast-1-an.s3-website-ap-southeast-1.amazonaws.com",
+			"http://localhost:5173"}
+	} else {
+		parts := strings.Split(originsEnv, ";")
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		cfg.AllowOrigins = parts
+	}
+
+	r.Use(cors.New(cfg))
 
 	// Simple API endpoint
 	r.GET("/api/hello", func(c *gin.Context) {
