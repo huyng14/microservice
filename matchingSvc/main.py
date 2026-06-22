@@ -1,7 +1,10 @@
 import logging
+import os
+import re
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from dotenv import load_dotenv
 
 from embeddingWGemini import ( work_exp_embedding_models, 
                                 assignment_desc_embedding_models )
@@ -11,11 +14,23 @@ from comparing_vector import ( compare_1consultant_with_1assignment_and_explain,
                                 generate_explanation_toConsultant, generate_explanation_toHiring_manager)
 
 app = Flask(__name__)
+
+# Load environment variables from .env (if present)
+load_dotenv()
+
+# Read CORS origins from CORS_ALLOW_ORIGINS env var. Accept comma/space/semicolon-separated list.
+cors_env = os.getenv("CORS_ALLOW_ORIGINS", "")
+if cors_env:
+    origins = [o.strip() for o in re.split(r"[,;\s]+", cors_env) if o.strip()]
+else:
+    # Fallback to previous hard-coded origins
+    origins = [
+        "http://s3-demo-web-497559249788-ap-southeast-1-an.s3-website-ap-southeast-1.amazonaws.com",
+        "http://localhost:5173",
+    ]
+
 # Enable CORS only for specified origins
-CORS(app, resources={r"/*": {"origins": [
-    "http://s3-demo-web-497559249788-ap-southeast-1-an.s3-website-ap-southeast-1.amazonaws.com",
-    "http://localhost:5173"
-]}})
+CORS(app, resources={r"/*": {"origins": origins}})
 # Configure logging with line numbers
 logging.basicConfig(
     level=logging.DEBUG,
