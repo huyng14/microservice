@@ -3,3 +3,5 @@ python-multipart
 uvicorn
 python-dotenv
 pymongo
+google-genai
+docx2txt

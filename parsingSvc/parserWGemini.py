@@ -1,3 +1,6 @@
+import os
+
+from dotenv import load_dotenv
 from google import genai
 from google.genai import errors
 import docx2txt
@@ -6,7 +9,12 @@ import json
 from mongoDB.CV import insert_to_mongo, update_to_mongo
 import logging
 
-client = genai.Client(api_key='')
+# Load environment variables from .env (if present)
+load_dotenv()
+
+# Read GENAI_API_KEY from environment variable
+genai_api_key = os.getenv("GENAI_API_KEY", "")
+client = genai.Client(api_key=genai_api_key)
 
 # Configure logging with line numbers
 logging.basicConfig(
