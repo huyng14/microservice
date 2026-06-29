@@ -2,12 +2,14 @@ import logging
 import os
 import re
 
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Request
 import threading
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from pathlib import Path
 import uuid
+
+from fastapi.staticfiles import StaticFiles
 
 from parserWGemini import parse_resume_docx
 from mongoDB.CV import find_uploaded_CV_by_taskId
@@ -55,10 +57,14 @@ async def health_check():
 # Create upload directory if it doesn't exist
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
-
+# Serve uploaded files at /files
+app.mount("/files", StaticFiles(directory=str(UPLOAD_DIR)), name="files")
+    
 @app.post("/upload/cv")
-async def upload(file: UploadFile = File(...)):
-    file_path = UPLOAD_DIR / file.filename
+async def upload(request: Request, file: UploadFile = File(...)):
+    # Generate a random taskId like CV_c07bfb93-1c5f-4d7d-9c39-26f3a0f79b18
+    taskId = f"CV_{uuid.uuid4()}"
+    file_path = UPLOAD_DIR / f"file-{taskId}.{file.filename.split('.')[-1]}"
 
     # Save file to disk
     with open(file_path, "wb") as buffer:
@@ -69,9 +75,8 @@ async def upload(file: UploadFile = File(...)):
     # Call Gemini API to parse information, then Store result in the database
   
     logger.info(f"Processing: {file_path}")
-    # Generate a random taskId like CV_c07bfb93-1c5f-4d7d-9c39-26f3a0f79b18 and run parser in background
-    taskId = f"CV_{uuid.uuid4()}"
-    threading.Thread(target=parse_resume_docx, args=(str(file_path), taskId), daemon=True).start()
+    # Run parser in background
+    threading.Thread(target=parse_resume_docx, args=(str(file_path), taskId, request), daemon=True).start()
     logger.info(f"Started background thread to parse {file_path} with taskId {taskId}")
 
     return {

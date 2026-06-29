@@ -24,7 +24,7 @@ logging.basicConfig(
 logging.disable(logging.DEBUG)  # Disable all DEBUG logs
 logger = logging.getLogger(__name__)
 
-def parse_resume_docx(file_path, taskId=None):
+def parse_resume_docx(file_path, taskId=None, request=None):
     # Ensure a taskId is set (generate if not provided)
     if not taskId:
         return None
@@ -83,5 +83,7 @@ def parse_resume_docx(file_path, taskId=None):
                            "project", "uploaded_files")
 
     # Insert resume_data using the helper
+    download_url = str(request.base_url).rstrip('/') + f"/files/file-{taskId}.{file_path.split('.')[-1]}"
+    resume_data["downloadurl"] = download_url
     return update_to_mongo({"data": resume_data, "taskId": taskId, "status": "COMPLETED"}, 
                            "project", "uploaded_files")
