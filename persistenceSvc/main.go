@@ -250,7 +250,7 @@ func httpServer(svc *httpServerSvc.HttpSvc) {
 		})
 	})
 
-	r.GET("/profiles/:id", svc.HandleGetPerson)
+	// r.GET("/profiles/:id", svc.HandleGetPerson)
 	r.GET("/listprofiles", svc.HandleListProfiles)
 	r.POST("/profile", svc.HandleCreateProfile)
 	r.PUT("/profile/:id", svc.HandleUpdateProfile)

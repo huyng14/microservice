@@ -20,15 +20,16 @@ type Education struct {
 }
 
 type Profile struct {
-	Id         string       `json:"id"`
-	Name       string       `json:"name"`
-	Email      string       `json:"email"`
-	Phone      string       `json:"phone"`
-	Title      string       `json:"title"`
-	Summary    string       `json:"summary"`
-	Skills     []string     `json:"skills"`
-	Experience []Experience `json:"experience"`
-	Education  []Education  `json:"education"`
-	CreatedAt  time.Time    `json:"createdAt"`
-	UpdatedAt  time.Time    `json:"updatedAt"`
+	Id          string       `json:"id"`
+	Name        string       `json:"name"`
+	Email       string       `json:"email"`
+	Phone       string       `json:"phone"`
+	Title       string       `json:"title"`
+	Summary     string       `json:"summary"`
+	Skills      []string     `json:"skills"`
+	Experience  []Experience `json:"experience"`
+	Education   []Education  `json:"education"`
+	DownloadUrl string       `json:"downloadurl"`
+	CreatedAt   time.Time    `json:"createdAt"`
+	UpdatedAt   time.Time    `json:"updatedAt"`
 }
