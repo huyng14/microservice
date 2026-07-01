@@ -3,6 +3,7 @@ package mongodb
 import (
 	"context"
 	"log"
+	"microservice/clientSide"
 	"microservice/models"
 	"time"
 
@@ -27,7 +28,7 @@ func (s *MongoSvc) InsertUser(databaseName, collectionName string, person models
 	return result, nil
 }
 
-func (s *MongoSvc) InsertCV(databaseName, collectionName string, cv models.Profile) (*mongo.InsertOneResult, error) {
+func (s *MongoSvc) InsertCV(databaseName, collectionName string, cv *models.Profile) (*mongo.InsertOneResult, error) {
 	collection := s.Client.Database(databaseName).Collection(collectionName)
 	cv.Id = primitive.NewObjectID().Hex()
 	cv.CreatedAt = time.Now()
@@ -87,6 +88,15 @@ func (s *MongoSvc) UpdateCV(databaseName, collectionName string, profile models.
 		return err
 	}
 
+	if !compareExperiences(profile.Experience, existingProfile.Experience) {
+		// Call matchingSvc to embed the experience data
+		matchingSvc := clientSide.NewMatchingSvc()
+		_, err = matchingSvc.GenerateWorkExpEmbeddings(profile.Id)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -99,4 +109,29 @@ func (s *MongoSvc) DeleteCV(databaseName, collectionName string, id string) erro
 	}
 
 	return nil
+}
+
+func compareExperiences(a, b []models.Experience) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	expMap := make(map[string]models.Experience)
+
+	for _, exp := range a {
+		expMap[exp.Id] = exp
+	}
+
+	for _, exp := range b {
+		old, ok := expMap[exp.Id]
+		if !ok {
+			return false
+		}
+
+		if old != exp {
+			return false
+		}
+	}
+
+	return true
 }

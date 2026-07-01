@@ -1,6 +1,7 @@
 package httpServerSvc
 
 import (
+	clientSide "microservice/clientSide"
 	"microservice/models"
 	mongodb "microservice/mongoDB"
 
@@ -112,7 +113,14 @@ func (s *HttpSvc) HandleCreateProfile(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	_, err := s.MongoSvc.InsertCV(databaseName, collectionName, profile)
+	_, err := s.MongoSvc.InsertCV(databaseName, collectionName, &profile)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	// Call matchingSvc to embed the experience data
+	matchingSvc := clientSide.NewMatchingSvc()
+	_, err = matchingSvc.GenerateWorkExpEmbeddings(profile.Id)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
