@@ -6,7 +6,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-from embeddingWGemini import ( work_exp_embedding_models, 
+from embeddingWGemini import ( assignment_desc_embedding_model_by_id, work_exp_embedding_model_by_id, work_exp_embedding_models, 
                                 assignment_desc_embedding_models )
 from comparing_vector import ( compare_1consultant_with_1assignment_and_explain, compare_consultant_with_assignments, 
                                 find_ID_from_database, 
@@ -114,6 +114,11 @@ def get_matched_score(consultant_id=None, assignment_id=None, explain=False, dat
         logger.error(error_msg)
         return {"error": error_msg, "response": None}
 
+# Health check route
+@app.route('/', methods=['GET'])
+def health_check():
+    return jsonify({"status": "ok"}), 200
+
 @app.route('/matching/<consultant_id>', methods=['POST'])
 def matching(consultant_id):
     # time.sleep(5)  # Simulate processing time
@@ -123,8 +128,8 @@ def matching(consultant_id):
     data = request.get_json()
     assignment_id = data.get('assignment_id') if data else None
     
-    compare_result = get_matched_score(consultant_id=consultant_id, assignment_id=assignment_id, explain=True
-                                        , database="project", 
+    compare_result = get_matched_score(consultant_id=consultant_id, assignment_id=assignment_id, explain=True, 
+                                        database="project", 
                                         collection_consultants="consultants", 
                                         collection_assignments="jobs")
     
@@ -139,11 +144,19 @@ def matching(consultant_id):
         'response': compare_result['response']
     }), 200
 
+@app.route('/embeddingmodel/consultant/<consultant_id>', methods=['POST'])
+def consultant_embedding_model(consultant_id):
+    # Implementation for embedding model route
+    work_exp_embedding_model_by_id(database_name="project", collection_name="consultants", consultant_id=consultant_id)
+    return jsonify({"status": "embedding generated for consultant_id: {}".format(consultant_id)}), 200
 
-# Health check route
-@app.route('/', methods=['GET'])
-def health_check():
-    return jsonify({"status": "ok"}), 200
+@app.route('/embeddingmodel/job/<job_id>', methods=['POST'])
+def job_embedding_model(job_id):
+    # Implementation for embedding model route
+    assignment_desc_embedding_model_by_id(database_name="project", collection_name="assignments", assignment_id=job_id)
+    return jsonify({"status": "embedding generated for job_id: {}".format(job_id)}), 200
+
+    
 
 if __name__ == '__main__':
     embed_result = embed_phase("project", "consultants", "jobs")

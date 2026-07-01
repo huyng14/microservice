@@ -39,6 +39,21 @@ def read_from_database(db_name, collection_name):
         logger.error(f"Error reading from MongoDB: {e}")
         return None
 
+def read_from_database_by_id(db_name, collection_name, id_value):
+    try:
+        client_mongo = MongoClient(mongo_uri)
+        db = client_mongo[db_name]
+        collection = db[collection_name]
+
+        # Read document by ID
+        document = collection.find_one({"id": id_value})
+
+        return document
+
+    except Exception as e:
+        logger.error(f"Error reading from MongoDB: {e}")
+        return None
+
 def update_embedding_in_database(db_name, collection_name, document_id, input_data, field_name="embedding"):
     try:
         client_mongo = MongoClient(mongo_uri)
@@ -91,6 +106,32 @@ def work_exp_embedding_models(database_name="project", collection_name="consulta
             continue
     return
 
+def work_exp_embedding_model_by_id(database_name="project", collection_name="consultants", consultant_id=None):
+    resume = read_from_database_by_id(database_name, collection_name, consultant_id)
+    
+    if resume is None:
+        logger.error(f"Consultant with id {consultant_id} not found in database.")
+        return
+    if "experience_embedding" not in resume and resume["experience"] is not None and len(resume["experience"]) > 0:
+    # work_experience_embedding does not exist, generating...
+        result = client.models.embed_content(
+            model="gemini-embedding-001",
+            contents=str(resume["experience"]))
+            # config=types.EmbedContentConfig(task_type="SEMANTIC_SIMILARITY")).embeddings
+
+        logger.debug(f"result.embeddings type is {type(result.embeddings)}, len = {len(result.embeddings)}")
+        # print(result.embeddings.values)
+        for e in result.embeddings:
+            logger.debug(f"e values type is {type(e.values)}, len = {len(e.values)}")
+            update_embedding_in_database(
+            database_name,
+            collection_name,
+            resume["_id"],
+            e.values,
+            field_name="experience_embedding")
+
+    return
+
 def assignment_desc_embedding_models(database_name="project", collection_name="assignments"):
     assignments = read_from_database(database_name, collection_name)
     for doc in assignments:
@@ -117,6 +158,33 @@ def assignment_desc_embedding_models(database_name="project", collection_name="a
             # description_embedding already exists, skipping...
             continue
     return
+
+def assignment_desc_embedding_model_by_id(database_name="project", collection_name="assignments", assignment_id=None):
+    assignment = read_from_database_by_id(database_name, collection_name, assignment_id)
+    
+    if assignment is None:
+        logger.error(f"Assignment with id {assignment_id} not found in database.")
+        return
+    
+    if "description_embedding" not in assignment and assignment["description"] is not None and len(assignment["description"]) > 0:
+        # description_embedding does not exist, generating...
+        result = client.models.embed_content(
+            model="gemini-embedding-001",
+            contents=str(assignment["description"]))
+            # config=types.EmbedContentConfig(task_type="SEMANTIC_SIMILARITY")).embeddings
+
+        # logger.info(f"result.embeddings type is {type(result.embeddings)}, len = {len(result.embeddings)}")
+        for e in result.embeddings:
+            logger.info(f"e values type is {type(e.values)}, len = {len(e.values)}")
+            update_embedding_in_database(
+                database_name,
+                collection_name,
+                assignment["_id"],
+                e.values,
+                field_name="description_embedding")
+
+    return
+
 
 if __name__ == "__main__":
     # Standalone usage examples
