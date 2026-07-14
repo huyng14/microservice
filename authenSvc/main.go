@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"net/smtp"
 	"os"
 	"strings"
 	"time"
@@ -17,14 +21,18 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/joho/godotenv"
 )
 
 type User struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
-	Email     string             `bson:"email" json:"email"`
-	Password  string             `bson:"password" json:"-"`
-	CreatedAt time.Time          `bson:"createdAt" json:"createdAt"`
-	UpdatedAt time.Time          `bson:"updatedAt" json:"updatedAt"`
+	ID                  primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	Email               string             `bson:"email" json:"email"`
+	Password            string             `bson:"password" json:"-"`
+	ResetToken          string             `bson:"resetToken,omitempty" json:"-"`
+	ResetTokenExpiresAt time.Time          `bson:"resetTokenExpiresAt,omitempty" json:"-"`
+	CreatedAt           time.Time          `bson:"createdAt" json:"createdAt"`
+	UpdatedAt           time.Time          `bson:"updatedAt" json:"updatedAt"`
 }
 
 type signupRequest struct {
@@ -35,6 +43,15 @@ type signupRequest struct {
 type signinRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
+}
+
+type forgotPasswordRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+type resetPasswordRequest struct {
+	Token    string `json:"token"`
+	Password string `json:"password" binding:"required,min=6"`
 }
 
 type userResponse struct {
@@ -60,6 +77,11 @@ func main() {
 	}
 
 	router := gin.Default()
+
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Println("No .env file found")
+	}
 
 	// Enable CORS so Vue (port 5173) can call Go (port 9000)
 	cfg := cors.Config{
@@ -91,6 +113,8 @@ func main() {
 
 	router.POST("/signup", signupHandler())
 	router.POST("/login", loginHandler())
+	router.POST("/forgot-password", forgotPasswordHandler())
+	router.POST("/new-password", resetPasswordHandler())
 
 	protected := router.Group("/")
 	protected.Use(authMiddleware())
@@ -104,9 +128,14 @@ func main() {
 }
 
 func initMongo() error {
-	uri := getEnv("MONGODB_URI", "mongodb+srv://skylab:skylab@consultatantaimatch.ftecqos.mongodb.net/")
+	uri := getEnv("MONGODB_URI", "")
 	dbName := getEnv("MONGODB_DB", "project")
 	collectionName := getEnv("MONGODB_COLLECTION", "usersdb")
+
+	if uri == "" && dbName == "" && collectionName == "" {
+		log.Println("MongoDB connection details not provided. Skipping MongoDB initialization.")
+		return nil
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -239,6 +268,118 @@ func loginHandler() gin.HandlerFunc {
 	}
 }
 
+func forgotPasswordHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req forgotPasswordRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		if usersCollection == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database not available"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		email := strings.ToLower(req.Email)
+		var user User
+		err := usersCollection.FindOne(ctx, bson.M{"email": email}).Decode(&user)
+		if err != nil {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "The email address is not registered with us. Please check and try again."})
+			return
+		}
+
+		token, err := generateResetToken()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not create reset token"})
+			return
+		}
+
+		expiresAt := time.Now().UTC().Add(15 * time.Minute)
+		_, err = usersCollection.UpdateOne(ctx, bson.M{"_id": user.ID}, bson.M{
+			"$set": bson.M{
+				"resetToken":          token,
+				"resetTokenExpiresAt": expiresAt,
+			},
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not save reset token"})
+			return
+		}
+
+		resetLink := buildResetPasswordLink(token)
+		if err := sendPasswordResetEmail(email, resetLink); err != nil {
+			log.Printf("could not send password reset email: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "A reset link has been sent to your email address. Please check your inbox."})
+	}
+}
+
+func resetPasswordHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req resetPasswordRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		token, exists := c.GetQuery("token")
+		if !exists {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "missing token"})
+			return
+		}
+		req.Token = token
+
+		if usersCollection == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database not available"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		var user User
+		err := usersCollection.FindOne(ctx, bson.M{"resetToken": req.Token}).Decode(&user)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired reset token"})
+			return
+		}
+
+		if user.ResetToken == "" || user.ResetToken != req.Token || isResetTokenExpired(user.ResetTokenExpiresAt) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired reset token"})
+			return
+		}
+
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not hash password"})
+			return
+		}
+
+		_, err = usersCollection.UpdateOne(ctx, bson.M{"_id": user.ID}, bson.M{
+			"$set": bson.M{
+				"password":  string(hashedPassword),
+				"updatedAt": time.Now().UTC(),
+			},
+			"$unset": bson.M{
+				"resetToken":          "",
+				"resetTokenExpiresAt": "",
+			},
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "could not update password"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "password updated successfully"})
+	}
+}
+
 func profileHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var userTmp User
@@ -305,6 +446,112 @@ func authMiddleware() gin.HandlerFunc {
 		c.Set("userID", userID)
 		c.Next()
 	}
+}
+
+func generateResetToken() (string, error) {
+
+	aes256Key := make([]byte, 32) // 256 bits
+	if _, err := rand.Read(aes256Key); err != nil {
+		log.Println("generateResetToken() error: ", err)
+	}
+
+	// aes256Hex := hex.EncodeToString(aes256Key)
+	// log.Println("AES-256 Key (Hex):", aes256Hex)
+	return hex.EncodeToString(aes256Key), nil
+}
+
+func isResetTokenExpired(expiresAt time.Time) bool {
+	return !expiresAt.IsZero() && time.Now().UTC().After(expiresAt)
+}
+
+func buildResetPasswordLink(token string) string {
+	baseURL := getEnv("FRONTEND_URL", "http://localhost:3000/reset-password")
+	if strings.Contains(baseURL, "?") {
+		return fmt.Sprintf("%s&token=%s", baseURL, token)
+	}
+	return fmt.Sprintf("%s?token=%s", baseURL, token)
+}
+
+func sendPasswordResetEmail(toEmail, resetLink string) error {
+	host := getEnv("SMTP_HOST", "smtp.gmail.com")
+	if host == "" {
+		return fmt.Errorf("smtp host not configured")
+	}
+
+	smtpPort := getEnv("SMTP_PORT", "587")
+	username := getEnv("SMTP_USERNAME", "")
+	password := getEnv("SMTP_PASSWORD", "")
+	from := getEnv("SMTP_FROM", username)
+	if username == "" || password == "" {
+		return fmt.Errorf("smtp credentials not configured")
+	}
+
+	auth := smtp.PlainAuth("", username, password, host)
+	message := fmt.Sprintf(
+		"To: %s\r\n"+
+			"Subject: [ConsultantMatching] Reset your password\r\n"+
+			"MIME-Version: 1.0\r\n"+
+			"Content-Type: text/html; charset=UTF-8\r\n\r\n"+
+
+			`<!DOCTYPE html>
+		<html>
+		<head>
+		<meta charset="UTF-8">
+		<title>Reset Password</title>
+		</head>
+		<body style="font-family: Arial, Helvetica, sans-serif; background-color:#f4f4f4; margin:0; padding:40px;">
+			<div style="max-width:600px; margin:auto; background:#ffffff; padding:40px; border-radius:8px;">
+
+				<h2 style="color:#333333;">Reset Your Password</h2>
+
+				<p>Hello,</p>
+
+				<p>We received a request to reset the password for your <strong>ConsultantMatching</strong> account.</p>
+
+				<p>Click the button below to create a new password:</p>
+
+				<p style="text-align:center; margin:35px 0;">
+					<a href="%s"
+						style="
+							background-color:#2563eb;
+							color:#ffffff;
+							padding:14px 28px;
+							text-decoration:none;
+							border-radius:6px;
+							font-weight:bold;
+							display:inline-block;">
+						Reset Password
+					</a>
+				</p>
+				<p>This link will expire after 15 minutes.</p>
+				<p>If the button doesn't work, copy and paste the following link into your browser:</p>
+
+				<p>
+					<a href="%s">%s</a>
+				</p>
+
+				<hr style="border:none; border-top:1px solid #e5e5e5; margin:30px 0;">
+
+				<p style="color:#666666; font-size:14px;">
+					If you did not request a password reset, you can safely ignore this email.
+					Your password will remain unchanged.
+				</p>
+
+				<p style="color:#666666; font-size:14px;">
+					Thanks,<br>
+					The ConsultantMatching Team
+				</p>
+
+			</div>
+		</body>
+		</html>`,
+		toEmail,
+		resetLink,
+		resetLink,
+		resetLink,
+	)
+	addr := net.JoinHostPort(host, smtpPort)
+	return smtp.SendMail(addr, auth, from, []string{toEmail}, []byte(message))
 }
 
 func generateToken(userID string) (string, error) {

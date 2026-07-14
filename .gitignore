@@ -33,7 +33,6 @@ Thumbs.db
 
 # Env & local config
 .env
-.env.*
 *.local
 
 # Temporary files
