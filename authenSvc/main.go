@@ -16,13 +16,12 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	jwt "github.com/golang-jwt/jwt/v5"
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/crypto/bcrypt"
-
-	"github.com/joho/godotenv"
 )
 
 type User struct {
@@ -72,16 +71,17 @@ var (
 )
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Println("No .env file found")
+	}
+
 	if err := initMongo(); err != nil {
 		log.Printf("mongo connection warning: %v", err)
 	}
 
 	router := gin.Default()
-
-	err := godotenv.Load(".env")
-	if err != nil {
-		log.Println("No .env file found")
-	}
 
 	// Enable CORS so Vue (port 5173) can call Go (port 9000)
 	cfg := cors.Config{
@@ -96,7 +96,7 @@ func main() {
 		cfg.AllowAllOrigins = true
 	} else if originsEnv == "" {
 		// fallback default used previously
-		cfg.AllowOrigins = []string{"http://localhost:3000"}
+		cfg.AllowOrigins = []string{"http://localhost:5173"}
 	} else {
 		parts := strings.Split(originsEnv, ";")
 		for i := range parts {
@@ -104,11 +104,11 @@ func main() {
 		}
 		cfg.AllowOrigins = parts
 	}
-
+	log.Println("CORS: ", cfg.AllowOrigins)
 	router.Use(cors.New(cfg))
 
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "Ok for health check"})
 	})
 
 	router.POST("/signup", signupHandler())
@@ -120,7 +120,7 @@ func main() {
 	protected.Use(authMiddleware())
 	protected.GET("/profile", profileHandler())
 
-	port := getEnv("PORT", "8282")
+	port := getEnv("PORT", "9001")
 	log.Printf("auth service listening on :%s", port)
 	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("server failed: %v", err)
@@ -195,6 +195,12 @@ func signupHandler() gin.HandlerFunc {
 			return
 		}
 
+		// If the email is not from @adabeat.com, return an error
+		if !strings.HasSuffix(strings.ToLower(req.Email), "@adabeat.com") {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only @adabeat.com emails are allowed"})
+			return
+		}
+
 		user := User{
 			Email:     strings.ToLower(req.Email),
 			Password:  string(hashedPassword),
@@ -227,14 +233,14 @@ func loginHandler() gin.HandlerFunc {
 		var req signinRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(),
-				"errors": gin.H{"credentials": err.Error()}})
+				"error": "credentials: " + err.Error()})
 			return
 		}
 
 		if usersCollection == nil {
 			// c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database not available"})
 			c.JSON(http.StatusServiceUnavailable, gin.H{"message": "Invalid credentials.",
-				"errors": gin.H{"credentials": "database not available."}})
+				"error": "database not available."})
 			return
 		}
 
@@ -245,13 +251,13 @@ func loginHandler() gin.HandlerFunc {
 		err := usersCollection.FindOne(ctx, bson.M{"email": strings.ToLower(req.Email)}).Decode(&user)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid credentials.",
-				"errors": gin.H{"credentials": "Invalid email or password entered."}})
+				"error": "Invalid email or password entered."})
 			return
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid credentials.",
-				"errors": gin.H{"credentials": "Invalid email or password entered."}})
+				"error": "Invalid email or password entered."})
 			return
 		}
 
@@ -489,7 +495,7 @@ func sendPasswordResetEmail(toEmail, resetLink string) error {
 	auth := smtp.PlainAuth("", username, password, host)
 	message := fmt.Sprintf(
 		"To: %s\r\n"+
-			"Subject: [ConsultantMatching] Reset your password\r\n"+
+			"Subject: [TalentMatch] Reset your password\r\n"+
 			"MIME-Version: 1.0\r\n"+
 			"Content-Type: text/html; charset=UTF-8\r\n\r\n"+
 
@@ -506,7 +512,7 @@ func sendPasswordResetEmail(toEmail, resetLink string) error {
 
 				<p>Hello,</p>
 
-				<p>We received a request to reset the password for your <strong>ConsultantMatching</strong> account.</p>
+				<p>We received a request to reset the password for your <strong>TalentMatch</strong> account.</p>
 
 				<p>Click the button below to create a new password:</p>
 
@@ -539,7 +545,7 @@ func sendPasswordResetEmail(toEmail, resetLink string) error {
 
 				<p style="color:#666666; font-size:14px;">
 					Thanks,<br>
-					The ConsultantMatching Team
+					The TalentMatch Team
 				</p>
 
 			</div>
