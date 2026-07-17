@@ -216,7 +216,7 @@ func httpServer(svc *httpServerSvc.HttpSvc) {
 	// Enable CORS so Vue (port 5173) can call Go (port 9000)
 	cfg := cors.Config{
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders: []string{"Content-Type"},
+		AllowHeaders: []string{"Content-Type, Authorization"},
 	}
 
 	// Read allowed origins from env var CORS_ALLOW_ORIGINS (comma-separated).
@@ -226,8 +226,7 @@ func httpServer(svc *httpServerSvc.HttpSvc) {
 		cfg.AllowAllOrigins = true
 	} else if originsEnv == "" {
 		// fallback default used previously
-		cfg.AllowOrigins = []string{"http://s3-demo-web-497559249788-ap-southeast-1-an.s3-website-ap-southeast-1.amazonaws.com",
-			"http://localhost:5173"}
+		cfg.AllowOrigins = []string{"http://localhost:5173"}
 	} else {
 		parts := strings.Split(originsEnv, ";")
 		for i := range parts {
@@ -251,16 +250,20 @@ func httpServer(svc *httpServerSvc.HttpSvc) {
 	})
 
 	// r.GET("/profiles/:id", svc.HandleGetPerson)
-	r.GET("/listprofiles", svc.HandleListProfiles)
-	r.POST("/profile", svc.HandleCreateProfile)
-	r.PUT("/profile/:id", svc.HandleUpdateProfile)
-	r.DELETE("/profile/:id", svc.HandleDeleteProfile)
+	// Create protected routes group and apply JWT auth middleware
+	protected := r.Group("/")
+	protected.Use(httpServerSvc.AuthMiddleware())
 
-	// ==== Job endpoints ====
-	r.GET("/listjobs", svc.HandleListJobs)
-	r.POST("/job", svc.HandleCreateJob)
-	r.DELETE("/job/:id", svc.HandleDeleteJob)
-	r.PUT("/job/:id", svc.HandleUpdateJob)
+	protected.GET("/listprofiles", svc.HandleListProfiles)
+	protected.POST("/profile", svc.HandleCreateProfile)
+	protected.PUT("/profile/:id", svc.HandleUpdateProfile)
+	protected.DELETE("/profile/:id", svc.HandleDeleteProfile)
+
+	// ==== Job endpoints (protected) ====
+	protected.GET("/listjobs", svc.HandleListJobs)
+	protected.POST("/job", svc.HandleCreateJob)
+	protected.DELETE("/job/:id", svc.HandleDeleteJob)
+	protected.PUT("/job/:id", svc.HandleUpdateJob)
 
 	r.Run("0.0.0.0:9000") // Run API on port 9000
 }
