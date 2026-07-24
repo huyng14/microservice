@@ -11,6 +11,7 @@
 bin/
 dist/
 release/
+parsingSvc/uploads/
 
 # Go modules vendor dir
 vendor/
