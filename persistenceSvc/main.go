@@ -8,9 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"microservice/authorization"
 	"microservice/httpServerSvc"
 	"microservice/models"
 	mongodb "microservice/mongoDB"
+	"microservice/services"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -167,7 +169,8 @@ func main() {
 
 	// ==== Initialize services ====
 	mongoSvc := &mongodb.MongoSvc{Client: Client}
-	httpSvc := &httpServerSvc.HttpSvc{MongoSvc: mongoSvc}
+	appSvc := &services.PersistenceService{Repo: mongoSvc}
+	httpSvc := &httpServerSvc.HttpSvc{Service: appSvc, UserRoles: mongoSvc}
 
 	// // ==== Keepalive parameters ====
 	// var kaPolicy = keepalive.EnforcementPolicy{
@@ -252,18 +255,18 @@ func httpServer(svc *httpServerSvc.HttpSvc) {
 	// r.GET("/profiles/:id", svc.HandleGetPerson)
 	// Create protected routes group and apply JWT auth middleware
 	protected := r.Group("/")
-	protected.Use(httpServerSvc.AuthMiddleware())
+	protected.Use(httpServerSvc.AuthMiddleware(svc.UserRoles))
 
-	protected.GET("/listprofiles", svc.HandleListProfiles)
-	protected.POST("/profile", svc.HandleCreateProfile)
-	protected.PUT("/profile/:id", svc.HandleUpdateProfile)
-	protected.DELETE("/profile/:id", svc.HandleDeleteProfile)
+	protected.GET("/listprofiles", authorization.RequirePermission(authorization.ResumeView), svc.HandleListProfiles)
+	protected.POST("/profile", authorization.RequirePermission(authorization.ResumeCreate), svc.HandleCreateProfile)
+	protected.PUT("/profile/:id", authorization.RequirePermission(authorization.ResumeUpdate), svc.HandleUpdateProfile)
+	protected.DELETE("/profile/:id", authorization.RequirePermission(authorization.ResumeDelete), svc.HandleDeleteProfile)
 
 	// ==== Job endpoints (protected) ====
-	protected.GET("/listjobs", svc.HandleListJobs)
-	protected.POST("/job", svc.HandleCreateJob)
-	protected.DELETE("/job/:id", svc.HandleDeleteJob)
-	protected.PUT("/job/:id", svc.HandleUpdateJob)
+	protected.GET("/listjobs", authorization.RequirePermission(authorization.JobView), svc.HandleListJobs)
+	protected.POST("/job", authorization.RequirePermission(authorization.JobCreate), svc.HandleCreateJob)
+	protected.DELETE("/job/:id", authorization.RequirePermission(authorization.JobDelete), svc.HandleDeleteJob)
+	protected.PUT("/job/:id", authorization.RequirePermission(authorization.JobUpdate), svc.HandleUpdateJob)
 
 	r.Run("0.0.0.0:9000") // Run API on port 9000
 }

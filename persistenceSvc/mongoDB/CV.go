@@ -44,9 +44,13 @@ func (s *MongoSvc) InsertCV(databaseName, collectionName string, cv *models.Prof
 }
 
 func (s *MongoSvc) ListAllCVs(databaseName, collectionName string) ([]models.Profile, error) {
+	return s.ListCVs(databaseName, collectionName, bson.M{})
+}
+
+func (s *MongoSvc) ListCVs(databaseName, collectionName string, filter bson.M) ([]models.Profile, error) {
 	collection := s.Client.Database(databaseName).Collection(collectionName)
 
-	cursor, err := collection.Find(context.Background(), bson.M{})
+	cursor, err := collection.Find(context.Background(), filter)
 	if err != nil {
 		return nil, err
 	}
@@ -67,6 +71,16 @@ func (s *MongoSvc) ListAllCVs(databaseName, collectionName string) ([]models.Pro
 	}
 
 	return profiles, nil
+}
+
+func (s *MongoSvc) GetCV(databaseName, collectionName, id string) (*models.Profile, error) {
+	var profile models.Profile
+	err := s.Client.Database(databaseName).Collection(collectionName).
+		FindOne(context.Background(), bson.M{"id": id}).Decode(&profile)
+	if err != nil {
+		return nil, err
+	}
+	return &profile, nil
 }
 
 func (s *MongoSvc) UpdateCV(databaseName, collectionName string, profile models.Profile) error {

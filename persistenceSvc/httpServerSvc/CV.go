@@ -1,15 +1,19 @@
 package httpServerSvc
 
 import (
+	"errors"
+	"microservice/authorization"
 	clientSide "microservice/clientSide"
 	"microservice/models"
-	mongodb "microservice/mongoDB"
+	"microservice/services"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
 type HttpSvc struct {
-	MongoSvc *mongodb.MongoSvc
+	Service   *services.PersistenceService
+	UserRoles UserRoleStore
 }
 
 const databaseName = "project"
@@ -98,24 +102,25 @@ const collectionName = "consultants"
 // }
 
 func (s *HttpSvc) HandleListProfiles(c *gin.Context) {
-	profiles := []models.Profile{}
-	profiles, err := s.MongoSvc.ListAllCVs(databaseName, collectionName)
+	user, _ := authorization.User(c)
+	profiles, err := s.Service.ListProfiles(user)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		writeServiceError(c, err)
 		return
 	}
 	c.JSON(200, profiles)
 }
 
 func (s *HttpSvc) HandleCreateProfile(c *gin.Context) {
+	user, _ := authorization.User(c)
 	var profile models.Profile
 	if err := c.ShouldBindJSON(&profile); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	_, err := s.MongoSvc.InsertCV(databaseName, collectionName, &profile)
+	_, err := s.Service.CreateProfile(user, &profile)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		writeServiceError(c, err)
 		return
 	}
 	// Call matchingSvc to embed the experience data
@@ -130,6 +135,7 @@ func (s *HttpSvc) HandleCreateProfile(c *gin.Context) {
 }
 
 func (s *HttpSvc) HandleUpdateProfile(c *gin.Context) {
+	user, _ := authorization.User(c)
 	var profile models.Profile
 	if err := c.ShouldBindJSON(&profile); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
@@ -137,9 +143,9 @@ func (s *HttpSvc) HandleUpdateProfile(c *gin.Context) {
 	}
 	profile.Id = c.Param("id")
 
-	err := s.MongoSvc.UpdateCV(databaseName, collectionName, profile)
+	err := s.Service.UpdateProfile(user, profile)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		writeServiceError(c, err)
 		return
 	}
 	c.JSON(200, gin.H{
@@ -147,12 +153,21 @@ func (s *HttpSvc) HandleUpdateProfile(c *gin.Context) {
 }
 
 func (s *HttpSvc) HandleDeleteProfile(c *gin.Context) {
+	user, _ := authorization.User(c)
 	id := c.Param("id")
-	err := s.MongoSvc.DeleteCV(databaseName, collectionName, id)
+	err := s.Service.DeleteProfile(user, id)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		writeServiceError(c, err)
 		return
 	}
 	c.JSON(200, gin.H{
 		"message": "CV deleted successfully"})
+}
+
+func writeServiceError(c *gin.Context, err error) {
+	if errors.Is(err, authorization.ErrForbidden) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 }

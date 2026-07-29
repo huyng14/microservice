@@ -2,6 +2,7 @@ package httpServerSvc
 
 import (
 	"fmt"
+	"microservice/authorization"
 	"microservice/models"
 	"time"
 
@@ -13,20 +14,21 @@ const jobDatabaseName = "project"
 const jobCollectionName = "jobs"
 
 func (s *HttpSvc) HandleListJobs(c *gin.Context) {
-	jobs := []models.Job{}
-	jobs, err := s.MongoSvc.ListAllJobs(jobDatabaseName, jobCollectionName)
+	user, _ := authorization.User(c)
+	jobs, err := s.Service.ListJobs(user)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		writeServiceError(c, err)
 		return
 	}
 	c.JSON(200, jobs)
 }
 
 func (s *HttpSvc) HandleDeleteJob(c *gin.Context) {
+	user, _ := authorization.User(c)
 	id := c.Param("id")
-	err := s.MongoSvc.DeleteJob(jobDatabaseName, jobCollectionName, id)
+	err := s.Service.DeleteJob(user, id)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		writeServiceError(c, err)
 		return
 	}
 	c.JSON(200, gin.H{
@@ -34,6 +36,7 @@ func (s *HttpSvc) HandleDeleteJob(c *gin.Context) {
 }
 
 func (s *HttpSvc) HandleCreateJob(c *gin.Context) {
+	user, _ := authorization.User(c)
 	var job models.Job
 	if err := c.ShouldBindJSON(&job); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
@@ -43,9 +46,9 @@ func (s *HttpSvc) HandleCreateJob(c *gin.Context) {
 	job.Id = primitive.NewObjectID().Hex()
 	job.CreatedAt = time.Now()
 	job.UpdatedAt = time.Now()
-	result, err := s.MongoSvc.InsertJob(jobDatabaseName, jobCollectionName, job)
+	result, err := s.Service.CreateJob(user, job)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		writeServiceError(c, err)
 		return
 	}
 
@@ -56,6 +59,7 @@ func (s *HttpSvc) HandleCreateJob(c *gin.Context) {
 }
 
 func (s *HttpSvc) HandleUpdateJob(c *gin.Context) {
+	user, _ := authorization.User(c)
 	var job models.Job
 	if err := c.ShouldBindJSON(&job); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
@@ -63,9 +67,9 @@ func (s *HttpSvc) HandleUpdateJob(c *gin.Context) {
 	}
 	job.Id = c.Param("id")
 
-	err := s.MongoSvc.UpdateJob(jobDatabaseName, jobCollectionName, job)
+	err := s.Service.UpdateJob(user, job)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		writeServiceError(c, err)
 		return
 	}
 	c.JSON(200, gin.H{

@@ -28,9 +28,13 @@ func (s *MongoSvc) InsertJob(databaseName, collectionName string, job models.Job
 }
 
 func (s *MongoSvc) ListAllJobs(databaseName, collectionName string) ([]models.Job, error) {
+	return s.ListJobs(databaseName, collectionName, bson.M{})
+}
+
+func (s *MongoSvc) ListJobs(databaseName, collectionName string, filter bson.M) ([]models.Job, error) {
 	collection := s.Client.Database(databaseName).Collection(collectionName)
 
-	cursor, err := collection.Find(context.Background(), bson.M{})
+	cursor, err := collection.Find(context.Background(), filter)
 	if err != nil {
 		return nil, err
 	}
@@ -50,6 +54,16 @@ func (s *MongoSvc) ListAllJobs(databaseName, collectionName string) ([]models.Jo
 	}
 
 	return jobs, nil
+}
+
+func (s *MongoSvc) GetJob(databaseName, collectionName, id string) (*models.Job, error) {
+	var job models.Job
+	err := s.Client.Database(databaseName).Collection(collectionName).
+		FindOne(context.Background(), bson.M{"id": id}).Decode(&job)
+	if err != nil {
+		return nil, err
+	}
+	return &job, nil
 }
 
 func (s *MongoSvc) DeleteJob(databaseName, collectionName, id string) error {

@@ -21,6 +21,7 @@ type Education struct {
 
 type Profile struct {
 	Id          string       `json:"id"`
+	OwnerID     string       `json:"ownerId" bson:"ownerId"`
 	Name        string       `json:"name"`
 	Email       string       `json:"email"`
 	Phone       string       `json:"phone"`
