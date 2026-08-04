@@ -1,360 +1,317 @@
 package main
 
 import (
-	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
-	"fmt"
-	"io"
+	"errors"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
-	"path/filepath"
-	"runtime"
+	"strings"
+	"sync"
 	"time"
 
-	loggingpb "microservice/template/logpb"
-	pb "microservice/template/personpb"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/backoff"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/emptypb"
+	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 )
 
-var persistenceClient pb.PersistenceServiceClient
-var logClient loggingpb.LogServiceClient
+const (
+	externalAudience = "api"
+	internalIssuer   = "gateway"
+	internalAudience = "persistence"
+)
 
-func getCaller(skip int) string {
-	_, file, line, ok := runtime.Caller(skip)
-	if !ok {
-		return "unknown:0"
-	}
-	return fmt.Sprintf("%s:%d", filepath.Base(file), line)
+type config struct {
+	externalSecret  []byte
+	internalSecret  []byte
+	persistenceURL  *url.URL
+	rateLimit       int
+	rateWindow      time.Duration
+	transport       http.RoundTripper
+	corsOrigins     []string
+	allowAllOrigins bool
 }
 
-func handleGetPerson(w http.ResponseWriter, r *http.Request) {
-	req := &pb.GetPersonRequest{}
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-
-		// Call gRPC logging method
-		SendLogMessage(
-			"ERROR",
-			fmt.Sprintln("Invalid request body", http.StatusBadRequest),
-		)
-		return
-	}
-
-	// Call gRPC method GetPerson
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	res, err := persistenceClient.GetPerson(ctx, &pb.GetPersonRequest{Id: req.Id})
-	if err != nil {
-		log.Printf("error calling GetPerson: %v", handleRpcError(err))
-		http.Error(w, "Error fetching person", http.StatusInternalServerError)
-
-		// Call gRPC logging method
-		SendLogMessage(
-			"ERROR",
-			fmt.Sprintln("Error fetching person", http.StatusInternalServerError),
-		)
-		return
-	}
-
-	log.Printf("User Service received person: %+v", res.Person)
-
-	fmt.Fprint(w, res.GetPerson())
+type window struct {
+	start time.Time
+	count int
 }
 
-func handlePostPerson(w http.ResponseWriter, r *http.Request) {
-	req := &pb.PostPersonRequest{}
-	err := json.NewDecoder(r.Body).Decode(&req.Person)
-	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-
-		// Call gRPC logging method
-		SendLogMessage(
-			"ERROR",
-			fmt.Sprintln("Invalid request body", http.StatusBadRequest),
-		)
-		return
-	}
-	log.Println("Print PostPersonRequest: ", req.Person)
-	// Call gRPC method PostPerson
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	res, err := persistenceClient.PostPerson(ctx, req)
-	if err != nil {
-		log.Printf("error calling PostPerson: %v", handleRpcError(err))
-		http.Error(w, "Error posting person", http.StatusInternalServerError)
-
-		// Call gRPC logging method
-		SendLogMessage(
-			"ERROR",
-			fmt.Sprintln("Error posting person", http.StatusInternalServerError),
-		)
-		return
-	}
-
-	log.Printf("User Service posted person with ID: %d", res.Id)
-
-	fmt.Fprintf(w, "Person created with ID: %d", res.Id)
-	// http.Error(w, "POST method not implemented yet", http.StatusNotImplemented)
+type limiter struct {
+	mu      sync.Mutex
+	limit   int
+	window  time.Duration
+	clients map[string]window
 }
 
-func handleProfiles(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		handleGetPerson(w, r)
-	case http.MethodPost:
-		handlePostPerson(w, r)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-
-		// Call gRPC logging method
-		SendLogMessage(
-			"ERROR",
-			fmt.Sprintln("Method not allowed", http.StatusMethodNotAllowed),
-		)
-	}
+func newLimiter(limit int, duration time.Duration) *limiter {
+	return &limiter{limit: limit, window: duration, clients: make(map[string]window)}
 }
 
-func handleListProfiles(w http.ResponseWriter, r *http.Request) {
-	// Only handle GET requests
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+func (l *limiter) allow(key string, now time.Time) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	current := l.clients[key]
+	if current.start.IsZero() || now.Sub(current.start) >= l.window {
+		l.clients[key] = window{start: now, count: 1}
+		return true
+	}
+	if current.count >= l.limit {
+		return false
+	}
+	current.count++
+	l.clients[key] = current
+	return true
+}
 
-		// Call gRPC logging method
-		SendLogMessage(
-			"ERROR",
-			fmt.Sprintln("Method not allowed", http.StatusMethodNotAllowed),
-		)
-		return
+const subjectContextKey = "subject"
+
+func gatewayHandler(cfg config) *gin.Engine {
+	proxy := httputil.NewSingleHostReverseProxy(cfg.persistenceURL)
+	if cfg.transport != nil {
+		proxy.Transport = cfg.transport
+	}
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		resp.Header.Del("Access-Control-Allow-Origin")
+		resp.Header.Del("Access-Control-Allow-Credentials")
+		resp.Header.Del("Access-Control-Allow-Methods")
+		resp.Header.Del("Access-Control-Allow-Headers")
+		return nil
+	}
+	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
+		log.Printf("persistence request failed: %v", err)
+		writeJSON(w, http.StatusBadGateway, "persistence unavailable")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
+	router := gin.New()
+	router.Use(gin.Logger(), gin.Recovery())
+	router.Use(corsMiddleware(cfg))
+	router.Use(authenticationMiddleware(cfg.externalSecret))
+	router.Use(rateLimitMiddleware(newLimiter(cfg.rateLimit, cfg.rateWindow)))
+	router.Use(internalIdentityMiddleware(cfg.internalSecret))
 
-	stream, err := persistenceClient.ListPersons(ctx, &emptypb.Empty{})
-	if err != nil {
-		log.Printf("error calling ListPersons: %v", handleRpcError(err))
-		http.Error(w, "Error listing persons", http.StatusInternalServerError)
+	persistence := proxyHandler(proxy)
 
-		// Call gRPC logging method
-		SendLogMessage(
-			"ERROR",
-			fmt.Sprintln("Error listing persons", http.StatusInternalServerError),
-		)
-		return
-	}
+	// Gateway :8080                    Persistence :9000
+	router.GET("/listprofiles", persistence)   // GET    /listprofiles -> GET    /listprofiles
+	router.POST("/profile", persistence)       // POST   /profile      -> POST   /profile
+	router.PUT("/profile/:id", persistence)    // PUT    /profile/:id  -> PUT    /profile/:id
+	router.DELETE("/profile/:id", persistence) // DELETE /profile/:id  -> DELETE /profile/:id
+	router.GET("/listjobs", persistence)       // GET    /listjobs     -> GET    /listjobs
+	router.POST("/job", persistence)           // POST   /job          -> POST   /job
+	router.PUT("/job/:id", persistence)        // PUT    /job/:id      -> PUT    /job/:id
+	router.DELETE("/job/:id", persistence)     // DELETE /job/:id      -> DELETE /job/:id
+	return router
+}
 
-	var persons []pb.Person
-	for {
-		personRes, err := stream.Recv()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			log.Printf("error receiving from stream: %v", err)
-			http.Error(w, fmt.Sprintf("error receiving from stream: %v", err), http.StatusInternalServerError)
-
-			// Call gRPC logging method
-			SendLogMessage(
-				"ERROR",
-				fmt.Sprintf("error receiving from stream: %v, %v", err, http.StatusInternalServerError),
-			)
+func corsMiddleware(cfg config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if origin == "" {
+			c.Next()
 			return
 		}
-		persons = append(persons, *personRes.Person)
-	}
 
-	responseData, err := json.Marshal(persons)
+		allowedOrigins := cfg.corsOrigins
+		if len(allowedOrigins) == 0 {
+			allowedOrigins = []string{"http://localhost:5173"}
+		}
+
+		allowed := cfg.allowAllOrigins
+		if !allowed {
+			for _, candidate := range allowedOrigins {
+				if candidate == origin {
+					allowed = true
+					break
+				}
+			}
+		}
+
+		if !allowed {
+			c.Next()
+			return
+		}
+
+		if cfg.allowAllOrigins {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		} else {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		}
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Vary", "Origin")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
+	}
+}
+
+func proxyHandler(proxy *httputil.ReverseProxy) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		proxy.ServeHTTP(c.Writer, c.Request)
+	}
+}
+
+func authenticationMiddleware(secret []byte) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		subject, err := validateExternalJWT(c.GetHeader("Authorization"), secret)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid access token"})
+			return
+		}
+		c.Set(subjectContextKey, subject)
+		c.Next()
+	}
+}
+
+func rateLimitMiddleware(limit *limiter) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		subject := c.GetString(subjectContextKey)
+		if !limit.allow(subject, time.Now()) {
+			c.Header("Retry-After", "60")
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "rate limit exceeded"})
+			return
+		}
+		c.Next()
+	}
+}
+
+func internalIdentityMiddleware(secret []byte) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		subject := c.GetString(subjectContextKey)
+		identity, err := signInternalIdentity(subject, secret, time.Now())
+		if err != nil {
+			log.Printf("could not sign internal identity: %v", err)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+		c.Request.Header.Set("Authorization", "Bearer "+identity)
+		c.Request.Header.Set("X-Forwarded-User", subject)
+		c.Next()
+	}
+}
+
+func validateExternalJWT(header string, secret []byte) (string, error) {
+	raw, err := bearerToken(header)
 	if err != nil {
-		http.Error(w, "Error marshalling response", http.StatusInternalServerError)
-
-		// Call gRPC logging method
-		SendLogMessage(
-			"ERROR",
-			fmt.Sprintln("Error marshalling response", http.StatusInternalServerError),
-		)
-		return
+		return "", err
 	}
+	claims := &jwt.RegisteredClaims{}
+	token, err := jwt.ParseWithClaims(raw, claims, func(token *jwt.Token) (any, error) {
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, errors.New("unexpected signing method")
+		}
+		return secret, nil
+	}, jwt.WithAudience(externalAudience), jwt.WithExpirationRequired(), jwt.WithIssuedAt())
+	if err != nil || !token.Valid || claims.Subject == "" {
+		return "", errors.New("invalid token")
+	}
+	return claims.Subject, nil
+}
 
+func signInternalIdentity(subject string, secret []byte, now time.Time) (string, error) {
+	nonce := make([]byte, 16)
+	if _, err := rand.Read(nonce); err != nil {
+		return "", err
+	}
+	claims := jwt.RegisteredClaims{
+		Subject:   subject,
+		Issuer:    internalIssuer,
+		Audience:  jwt.ClaimStrings{internalAudience},
+		ExpiresAt: jwt.NewNumericDate(now.Add(30 * time.Second)),
+		IssuedAt:  jwt.NewNumericDate(now),
+		NotBefore: jwt.NewNumericDate(now.Add(-time.Second)),
+		ID:        hex.EncodeToString(nonce),
+	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(secret)
+}
+
+func bearerToken(header string) (string, error) {
+	parts := strings.Fields(header)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
+		return "", errors.New("missing bearer token")
+	}
+	return parts[1], nil
+}
+
+func writeJSON(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(responseData)
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
-func firstPage(w http.ResponseWriter, r *http.Request) {
-	// Only handle GET requests
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-
-		// Call gRPC logging method
-		SendLogMessage(
-			"ERROR",
-			fmt.Sprintln("firstPage: method not allowed", http.StatusMethodNotAllowed),
-		)
-
-		return
+func env(name string) (string, error) {
+	value := os.Getenv(name)
+	if value == "" {
+		return "", errors.New(name + " is required")
 	}
-
-	// Format person data as JSON-like output
-	response := fmt.Sprintf("Hello stranger. \nTime: %s", time.Now())
-
-	fmt.Fprint(w, response)
+	return value, nil
 }
 
-func SendLogMessage(
-	level string,
-	message string,
-) error {
-	// Call gRPC logging method
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
+func getEnv(key, fallback string) (string, error) {
+	if value := os.Getenv(key); value != "" {
+		return value, nil
+	}
+	return fallback, nil
+}
 
-	stackTrace := getCaller(2)
-
-	// Send log via gRPC
-	_, err := logClient.LogEvent(ctx, &loggingpb.LogEventRequest{
-		LogEntry: &loggingpb.LogEntry{
-			Service:    "gatewaySvc",
-			Level:      level,
-			Message:    message,
-			StackTrace: stackTrace,
-		},
-	})
-
+func loadConfig() (config, error) {
+	external, err := getEnv("EXTERNAL_IDENTITY_SECRET", "dev-secret-change-me")
 	if err != nil {
-		log.Printf("error calling LogEvent: %v", err)
-		return err
+		return config{}, err
+	}
+	internal, err := getEnv("INTERNAL_IDENTITY_SECRET", "internal-secret-change-me")
+	if err != nil {
+		return config{}, err
+	}
+	target, err := getEnv("PERSISTENCE_HTTP_URL", "http://localhost:9000")
+	if err != nil {
+		return config{}, err
+	}
+	targetURL, err := url.Parse(target)
+	if err != nil {
+		return config{}, err
+	}
+	originsEnv := os.Getenv("CORS_ALLOW_ORIGINS")
+	var corsOrigins []string
+	allowAllOrigins := false
+	if originsEnv == "*" {
+		allowAllOrigins = true
+	} else if originsEnv == "" {
+		corsOrigins = []string{"http://localhost:5173"}
+	} else {
+		parts := strings.Split(originsEnv, ";")
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		corsOrigins = parts
 	}
 
-	return nil
+	return config{
+		externalSecret: []byte(external), internalSecret: []byte(internal),
+		persistenceURL: targetURL, rateLimit: 60, rateWindow: time.Minute,
+		corsOrigins: corsOrigins, allowAllOrigins: allowAllOrigins,
+	}, nil
 }
 
 func main() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-
-	// Channels to signal gRPC client readiness
-	persistenceReady := make(chan struct{})
-	loggingReady := make(chan struct{})
-
-	retryPolicy := backoff.Config{
-		BaseDelay:  1 * time.Second,  // initial backoff
-		Multiplier: 1.6,              // backoff multiplier
-		MaxDelay:   10 * time.Second, // max delay
+	cfg, err := loadConfig()
+	if err != nil {
+		log.Fatal(err)
 	}
-	ka := keepalive.ClientParameters{
-		Time:                10 * time.Second,
-		Timeout:             3 * time.Second,
-		PermitWithoutStream: true,
+	server := &http.Server{
+		Addr:              ":8080",
+		Handler:           gatewayHandler(cfg),
+		ReadHeaderTimeout: 5 * time.Second,
 	}
-
-	go func() {
-		log.Println("Starting gRPC client connection to Persistence Service")
-
-		// Connect to Persistence Service
-		persistenceAddr := os.Getenv("PERSISTENCE_GRPC_ADDR")
-		if persistenceAddr == "" {
-			log.Println("PERSISTENCE_GRPC_ADDR not set, defaulting to localhost:9000")
-			persistenceAddr = "localhost:9000"
-		}
-		conn, err := grpc.NewClient(persistenceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithConnectParams(grpc.ConnectParams{
-				Backoff:           retryPolicy,
-				MinConnectTimeout: 5 * time.Second,
-			}),
-			grpc.WithKeepaliveParams(ka),
-		)
-		if err != nil {
-			log.Fatalf("failed to connect to persistence service: %v", err)
-		}
-
-		persistenceClient = pb.NewPersistenceServiceClient(conn)
-		close(persistenceReady)
-	}()
-
-	go func() {
-		log.Println("Starting gRPC client connection to Logging Service")
-
-		// Connect to Logging Service
-		loggingAddr := os.Getenv("LOGGING_GRPC_ADDR")
-		if loggingAddr == "" {
-			log.Println("LOGGING_GRPC_ADDR not set, defaulting to localhost:6514")
-			loggingAddr = "localhost:6514"
-		}
-		conn, err := grpc.NewClient(loggingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithConnectParams(grpc.ConnectParams{
-				Backoff:           retryPolicy,
-				MinConnectTimeout: 5 * time.Second,
-			}),
-			grpc.WithKeepaliveParams(ka),
-		)
-		if err != nil {
-			log.Fatalf("failed to connect to persistence service: %v", err)
-		}
-
-		logClient = loggingpb.NewLogServiceClient(conn)
-		close(loggingReady)
-	}()
-
-	go func() {
-		<-persistenceReady
-		<-loggingReady
-		log.Println("Both gRPC clients initialized successfully")
-
-		log.Println("Starting HTTP server on :8080")
-		http.HandleFunc("/", firstPage)
-		http.HandleFunc("/profiles", handleProfiles)
-		http.HandleFunc("/listprofiles", handleListProfiles)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-
-		pongPersistence, err := persistenceClient.Ping(ctx, &pb.PingRequest{})
-		if err != nil {
-			log.Fatalf("Error pinging Persistence Service: %v", err)
-		}
-		pongLogging, err := logClient.Ping(ctx, &loggingpb.PingRequest{})
-		if err != nil {
-			log.Fatalf("Error pinging Logging Service: %v", err)
-		}
-		if pongPersistence.GetStatus() == "OK" && pongLogging.GetStatus() == "OK" {
-			if err := http.ListenAndServe(":8080", nil); err != nil {
-				log.Fatalf("HTTP server error: %v", err)
-			}
-		}
-	}()
-	// Prevent main from exiting
-	select {}
-}
-
-func handleRpcError(err error) error {
-	st, ok := status.FromError(err)
-	if !ok {
-		return fmt.Errorf("non-gRPC error: %v", err)
-	}
-
-	switch st.Code() {
-
-	case codes.DeadlineExceeded:
-		return fmt.Errorf("timeout, server did not respond")
-
-	case codes.Unavailable:
-		return fmt.Errorf("server unavailable or broken connection")
-
-	case codes.InvalidArgument:
-		return fmt.Errorf("bad client request: %v", st.Message())
-
-	case codes.Internal:
-		return fmt.Errorf("server internal error: %v", st.Message())
-
-	default:
-		return fmt.Errorf("gRPC error [%s]: %s", st.Code(), st.Message())
-	}
+	log.Println("gateway listening on :8080")
+	log.Fatal(server.ListenAndServe())
 }

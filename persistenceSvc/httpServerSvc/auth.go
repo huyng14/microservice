@@ -2,7 +2,6 @@ package httpServerSvc
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -17,11 +16,16 @@ type UserRoleStore interface {
 	GetUserRole(ctx context.Context, userID string) (string, error)
 }
 
-// AuthMiddleware validates a Bearer JWT from the Authorization header.
-// It expects a HMAC-signed token and uses the JWT_SECRET environment variable.
+// AuthMiddleware trusts only short-lived identity tokens minted by the gateway.
+// Roles are deliberately loaded by persistence and never accepted from claims.
 func AuthMiddleware(users UserRoleStore) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		jwtSecret := []byte("dev-secret-change-me")
+		jwtSecret := []byte("internal-secret-change-me")
+		if len(jwtSecret) == 0 {
+			log.Print("INTERNAL_IDENTITY_SECRET is not configured")
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "service unavailable"})
+			return
+		}
 
 		authorizationHeader := c.GetHeader("Authorization")
 		parts := strings.Split(authorizationHeader, " ")
@@ -30,25 +34,21 @@ func AuthMiddleware(users UserRoleStore) gin.HandlerFunc {
 			return
 		}
 
-		token, err := jwt.Parse(parts[1], func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		claims := &jwt.RegisteredClaims{}
+		token, err := jwt.ParseWithClaims(parts[1], claims, func(token *jwt.Token) (interface{}, error) {
+			if token.Method != jwt.SigningMethodHS256 {
+				return nil, authorization.ErrForbidden
 			}
-			return []byte(jwtSecret), nil
-		})
+			return jwtSecret, nil
+		}, jwt.WithIssuer("gateway"), jwt.WithAudience("persistence"),
+			jwt.WithExpirationRequired(), jwt.WithIssuedAt())
 		if err != nil || !token.Valid {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token by parse"})
 			return
 		}
 
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token by claims"})
-			return
-		}
-
-		userID, ok := claims["sub"].(string)
-		if !ok || userID == "" {
+		userID := claims.Subject
+		if userID == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}

@@ -9,11 +9,10 @@ services:
       - "8080:8080" # expose HTTP gateway to host
     depends_on:
       - persistenceSvc
-      - loggingSvc
     environment:
-      # gRPC endpoints of downstream services (reachable via Docker DNS)
-      PERSISTENCE_GRPC_ADDR: persistenceSvc:9000
-      LOGGING_GRPC_ADDR: loggingSvc:6514
+      PERSISTENCE_HTTP_URL: http://persistenceSvc:9000
+      EXTERNAL_JWT_SECRET: ${EXTERNAL_JWT_SECRET:?set EXTERNAL_JWT_SECRET}
+      INTERNAL_IDENTITY_SECRET: ${INTERNAL_IDENTITY_SECRET:?set INTERNAL_IDENTITY_SECRET}
     networks:
       - backend
 
@@ -26,18 +25,9 @@ services:
     # gRPC port (internal; not exposed to host unless you need it)
     expose:
       - "9000"
-    networks:
-      - backend
-
-  loggingSvc:
-    image: micro-services-loggingsvc
-    build:
-      context: ./loggingSvc
-      dockerfile: Dockerfile
-    container_name: loggingSvc
-    # gRPC port (internal; not exposed to host unless you need it)
-    expose:
-      - "6514"
+    environment:
+      INTERNAL_IDENTITY_SECRET: ${INTERNAL_IDENTITY_SECRET:?set INTERNAL_IDENTITY_SECRET}
+      MONGO_URI: ${MONGO_URI}
     networks:
       - backend
 

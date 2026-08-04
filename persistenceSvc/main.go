@@ -216,7 +216,6 @@ func httpServer(svc *httpServerSvc.HttpSvc) {
 	r := gin.Default()
 
 	log.Println("Starting HTTP server on :9000")
-	// Enable CORS so Vue (port 5173) can call Go (port 9000)
 	cfg := cors.Config{
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders: []string{"Content-Type, Authorization"},
@@ -229,7 +228,7 @@ func httpServer(svc *httpServerSvc.HttpSvc) {
 		cfg.AllowAllOrigins = true
 	} else if originsEnv == "" {
 		// fallback default used previously
-		cfg.AllowOrigins = []string{"http://localhost:5173"}
+		cfg.AllowOrigins = []string{"*"}
 	} else {
 		parts := strings.Split(originsEnv, ";")
 		for i := range parts {

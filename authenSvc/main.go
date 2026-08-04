@@ -561,9 +561,12 @@ func sendPasswordResetEmail(toEmail, resetLink string) error {
 }
 
 func generateToken(userID string) (string, error) {
+	now := time.Now()
 	claims := jwt.MapClaims{
 		"sub": userID,
-		"exp": time.Now().Add(15 * time.Minute).Unix(),
+		"aud": "api",
+		"iat": now.Unix(),
+		"exp": now.Add(15 * time.Minute).Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

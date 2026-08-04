@@ -46,6 +46,7 @@ type Grant struct {
 }
 
 var ErrForbidden = errors.New("forbidden")
+var ErrNotFound = errors.New("not found")
 
 var RolePermissions = map[Role][]Grant{
 	RoleAdmin: {

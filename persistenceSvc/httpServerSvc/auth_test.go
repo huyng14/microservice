@@ -2,8 +2,6 @@ package httpServerSvc
 
 import (
 	"context"
-	"log"
-	mongodb "microservice/mongoDB"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,51 +9,29 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type fakeUserRoleStore struct {
-	userID   string
-	role     string
-	mongoSvc *mongodb.MongoSvc
+	userID string
+	role   string
 }
 
 func (f *fakeUserRoleStore) GetUserRole(_ context.Context, userID string) (string, error) {
 	f.userID = userID
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb+srv://skylab:skylab@consultatantaimatch.ftecqos.mongodb.net/"))
-	if err != nil {
-		return "", err
-	}
-
-	if err := client.Ping(ctx, nil); err != nil {
-		return "", err
-	}
-
-	log.Println("Connected to MongoDB!")
-	mongoSvc := &mongodb.MongoSvc{Client: client}
-	f.mongoSvc = mongoSvc
-
-	role, err := mongoSvc.GetUserRole(ctx, userID)
-	if err != nil {
-		return "", err
-	}
-	f.role = role
-	log.Println("(f *fakeUserRoleStore) GetUserRole() role = ", role)
-
+	f.role = "CONSULTANT"
 	return f.role, nil
 }
 
 func TestAuthMiddlewareLoadsRoleFromStore(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	t.Setenv("JWT_SECRET", "dev-secret-change-me")
+	t.Setenv("INTERNAL_IDENTITY_SECRET", "dev-secret-change-me")
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": "6a61cacfa801a87dca9780e3",
-		"exp": time.Now().Add(time.Hour).Unix(),
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
+		Subject:   "6a61cacfa801a87dca9780e3",
+		Issuer:    "gateway",
+		Audience:  jwt.ClaimStrings{"persistence"},
+		IssuedAt:  jwt.NewNumericDate(time.Now()),
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute)),
 	})
 	tokenValue, err := token.SignedString([]byte("dev-secret-change-me"))
 	if err != nil {
