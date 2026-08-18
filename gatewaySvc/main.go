@@ -28,6 +28,8 @@ type config struct {
 	externalSecret  []byte
 	internalSecret  []byte
 	persistenceURL  *url.URL
+	matchingURL     *url.URL
+	authenURL       *url.URL
 	rateLimit       int
 	rateWindow      time.Duration
 	transport       http.RoundTripper
@@ -70,30 +72,25 @@ func (l *limiter) allow(key string, now time.Time) bool {
 const subjectContextKey = "subject"
 
 func gatewayHandler(cfg config) *gin.Engine {
-	proxy := httputil.NewSingleHostReverseProxy(cfg.persistenceURL)
-	if cfg.transport != nil {
-		proxy.Transport = cfg.transport
-	}
-	proxy.ModifyResponse = func(resp *http.Response) error {
-		resp.Header.Del("Access-Control-Allow-Origin")
-		resp.Header.Del("Access-Control-Allow-Credentials")
-		resp.Header.Del("Access-Control-Allow-Methods")
-		resp.Header.Del("Access-Control-Allow-Headers")
-		return nil
-	}
-	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
-		log.Printf("persistence request failed: %v", err)
-		writeJSON(w, http.StatusBadGateway, "persistence unavailable")
-	}
 
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery())
 	router.Use(corsMiddleware(cfg))
+
+	// Public auth routes (no authentication required)
+	authentication := createProxyHandler(cfg.authenURL, cfg.transport, "authentication")
+	router.POST("/signup", authenticationMiddleware(cfg.externalSecret), authGetFirstToken(), signupHandler(authentication))
+	router.POST("/login", authenticationMiddleware(cfg.externalSecret), authGetFirstToken(), loginHandler(authentication))
+	router.POST("/forgot-password", forgotPasswordHandler(authentication))
+	router.POST("/new-password", resetPasswordHandler(authentication))
+
+	// Protected routes with authentication
 	router.Use(authenticationMiddleware(cfg.externalSecret))
 	router.Use(rateLimitMiddleware(newLimiter(cfg.rateLimit, cfg.rateWindow)))
 	router.Use(internalIdentityMiddleware(cfg.internalSecret))
 
-	persistence := proxyHandler(proxy)
+	persistence := createProxyHandler(cfg.persistenceURL, cfg.transport, "persistence")
+	matching := createProxyHandler(cfg.matchingURL, cfg.transport, "matching")
 
 	// Gateway :8080                    Persistence :9000
 	router.GET("/listprofiles", persistence)   // GET    /listprofiles -> GET    /listprofiles
@@ -104,6 +101,12 @@ func gatewayHandler(cfg config) *gin.Engine {
 	router.POST("/job", persistence)           // POST   /job          -> POST   /job
 	router.PUT("/job/:id", persistence)        // PUT    /job/:id      -> PUT    /job/:id
 	router.DELETE("/job/:id", persistence)     // DELETE /job/:id      -> DELETE /job/:id
+
+	// Gateway :8080                    Matching :9030
+	router.POST("/matching/:consultant_id", matching)
+	router.POST("/embeddingmodel/consultant/:consultant_id", matching)
+	router.POST("/embeddingmodel/job/:job_id", matching)
+
 	return router
 }
 
@@ -157,6 +160,56 @@ func corsMiddleware(cfg config) gin.HandlerFunc {
 func proxyHandler(proxy *httputil.ReverseProxy) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		proxy.ServeHTTP(c.Writer, c.Request)
+	}
+}
+
+func createProxyHandler(target *url.URL, transport http.RoundTripper, serviceName string) gin.HandlerFunc {
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	if transport != nil {
+		proxy.Transport = transport
+	}
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		resp.Header.Del("Access-Control-Allow-Origin")
+		resp.Header.Del("Access-Control-Allow-Credentials")
+		resp.Header.Del("Access-Control-Allow-Methods")
+		resp.Header.Del("Access-Control-Allow-Headers")
+		return nil
+	}
+	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
+		log.Printf("%s request failed: %v", serviceName, err)
+		writeJSON(w, http.StatusBadGateway, serviceName+" unavailable")
+	}
+	return func(c *gin.Context) {
+		proxy.ServeHTTP(c.Writer, c.Request)
+	}
+}
+
+func authGetFirstToken() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.GetHeader("Authorization") == "" {
+			c.Set(subjectContextKey, "")
+		}
+		c.Next()
+	}
+}
+
+func signupHandler(handler gin.HandlerFunc) gin.HandlerFunc {
+	return handler
+}
+
+func loginHandler(handler gin.HandlerFunc) gin.HandlerFunc {
+	return handler
+}
+
+func forgotPasswordHandler(handler gin.HandlerFunc) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		handler(c)
+	}
+}
+
+func resetPasswordHandler(handler gin.HandlerFunc) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		handler(c)
 	}
 }
 
@@ -272,14 +325,32 @@ func loadConfig() (config, error) {
 	if err != nil {
 		return config{}, err
 	}
-	target, err := getEnv("PERSISTENCE_HTTP_URL", "http://localhost:9000")
+	persistence, err := getEnv("PERSISTENCE_HTTP_URL", "http://localhost:9000")
 	if err != nil {
 		return config{}, err
 	}
-	targetURL, err := url.Parse(target)
+	persistenceURL, err := url.Parse(persistence)
 	if err != nil {
 		return config{}, err
 	}
+	matching, err := getEnv("MATCHING_HTTP_URL", "http://localhost:9020")
+	if err != nil {
+		return config{}, err
+	}
+	matchingURL, err := url.Parse(matching)
+	if err != nil {
+		return config{}, err
+	}
+
+	authen, err := getEnv("AUTHEN_HTTP_URL", "http://localhost:9001")
+	if err != nil {
+		return config{}, err
+	}
+	authenURL, err := url.Parse(authen)
+	if err != nil {
+		return config{}, err
+	}
+
 	originsEnv := os.Getenv("CORS_ALLOW_ORIGINS")
 	var corsOrigins []string
 	allowAllOrigins := false
@@ -297,7 +368,8 @@ func loadConfig() (config, error) {
 
 	return config{
 		externalSecret: []byte(external), internalSecret: []byte(internal),
-		persistenceURL: targetURL, rateLimit: 60, rateWindow: time.Minute,
+		persistenceURL: persistenceURL, matchingURL: matchingURL, authenURL: authenURL,
+		rateLimit: 60, rateWindow: time.Minute,
 		corsOrigins: corsOrigins, allowAllOrigins: allowAllOrigins,
 	}, nil
 }
