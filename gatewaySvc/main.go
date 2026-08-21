@@ -16,6 +16,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/joho/godotenv"
 )
 
 const (
@@ -79,8 +80,8 @@ func gatewayHandler(cfg config) *gin.Engine {
 
 	// Public auth routes (no authentication required)
 	authentication := createProxyHandler(cfg.authenURL, cfg.transport, "authentication")
-	router.POST("/signup", authenticationMiddleware(cfg.externalSecret), authGetFirstToken(), signupHandler(authentication))
-	router.POST("/login", authenticationMiddleware(cfg.externalSecret), authGetFirstToken(), loginHandler(authentication))
+	router.POST("/signup", authGetFirstToken(), signupHandler(authentication))
+	router.POST("/login", authGetFirstToken(), loginHandler(authentication))
 	router.POST("/forgot-password", forgotPasswordHandler(authentication))
 	router.POST("/new-password", resetPasswordHandler(authentication))
 
@@ -317,6 +318,11 @@ func getEnv(key, fallback string) (string, error) {
 }
 
 func loadConfig() (config, error) {
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Println("No .env file found")
+	}
+
 	external, err := getEnv("EXTERNAL_IDENTITY_SECRET", "dev-secret-change-me")
 	if err != nil {
 		return config{}, err
