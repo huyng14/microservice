@@ -79,6 +79,10 @@ func gatewayHandler(cfg config) *gin.Engine {
 	router.Use(corsMiddleware(cfg))
 
 	// Public auth routes (no authentication required)
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "Ok for health check"})
+	})
+
 	authentication := createProxyHandler(cfg.authenURL, cfg.transport, "authentication")
 	router.POST("/signup", authGetFirstToken(), signupHandler(authentication))
 	router.POST("/login", authGetFirstToken(), loginHandler(authentication))
