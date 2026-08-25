@@ -222,7 +222,7 @@ func authenticationMiddleware(secret []byte) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		subject, err := validateExternalJWT(c.GetHeader("Authorization"), secret)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid access token"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid access token", "details": err.Error()})
 			return
 		}
 		c.Set(subjectContextKey, subject)
