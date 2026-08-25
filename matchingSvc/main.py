@@ -165,5 +165,7 @@ if __name__ == '__main__':
     else:
         logger.debug(f"\n✗ Embedding phase failed: {embed_result['status']}")
 
-    logger.info('Matching Service running on http://0.0.0.0:9020')
-    app.run(host='0.0.0.0', port=9020)
+    # get environment variable for port, default to 9003 if not set
+    port = int(os.getenv("PORT", 9003))
+    logger.info(f'Matching Service running on http://0.0.0.0:{port}')
+    app.run(host='0.0.0.0', port=port, debug=False)
