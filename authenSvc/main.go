@@ -67,7 +67,7 @@ type authResponse struct {
 
 var (
 	usersCollection *mongo.Collection
-	jwtSecret       = []byte(getEnv("JWT_SECRET", "dev-secret-change-me"))
+	jwtSecret       = []byte("dev-secret-change-me")
 )
 
 func main() {
@@ -76,6 +76,13 @@ func main() {
 	if err != nil {
 		log.Println("No .env file found")
 	}
+	jwtSecretEnv := os.Getenv("JWT_SECRET")
+	if jwtSecretEnv == "" {
+		log.Println("Warning: JWT_SECRET is not set. Using default secret. This is not secure for production.")
+	} else {
+		jwtSecret = []byte(jwtSecretEnv)
+	}
+	// log.Println("jwtSecret", string(jwtSecret))
 
 	if err := initMongo(); err != nil {
 		log.Printf("mongo connection warning: %v", err)
