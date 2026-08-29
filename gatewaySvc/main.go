@@ -31,6 +31,7 @@ type config struct {
 	persistenceURL  *url.URL
 	matchingURL     *url.URL
 	authenURL       *url.URL
+	parsingURL      *url.URL
 	rateLimit       int
 	rateWindow      time.Duration
 	transport       http.RoundTripper
@@ -96,6 +97,8 @@ func gatewayHandler(cfg config) *gin.Engine {
 
 	persistence := createProxyHandler(cfg.persistenceURL, cfg.transport, "persistence")
 	matching := createProxyHandler(cfg.matchingURL, cfg.transport, "matching")
+	// parsingSvc := createDirectProxyHandler(cfg.parsingURL, "parsing")
+	parsingSvc := createProxyHandler(cfg.parsingURL, cfg.transport, "parsing")
 
 	// Gateway :8080                    Persistence :9000
 	router.GET("/listprofiles", persistence)   // GET    /listprofiles -> GET    /listprofiles
@@ -111,6 +114,11 @@ func gatewayHandler(cfg config) *gin.Engine {
 	router.POST("/matching/:consultant_id", matching)
 	router.POST("/embeddingmodel/consultant/:consultant_id", matching)
 	router.POST("/embeddingmodel/job/:job_id", matching)
+
+	// parsingSvc APIs. Using method-specific routes prevents unsupported
+	// methods while allowing the POST body to remain multipart/form-data.
+	router.GET("/cv/:taskId/result", parsingSvc)
+	router.POST("/upload/cv", parsingSvc)
 
 	return router
 }
@@ -361,6 +369,15 @@ func loadConfig() (config, error) {
 		return config{}, err
 	}
 
+	parsing, err := getEnv("PARSING_HTTP_URL", "http://localhost:9002")
+	if err != nil {
+		return config{}, err
+	}
+	parsingURL, err := url.Parse(parsing)
+	if err != nil {
+		return config{}, err
+	}
+
 	originsEnv := os.Getenv("CORS_ALLOW_ORIGINS")
 	var corsOrigins []string
 	allowAllOrigins := false
@@ -378,7 +395,7 @@ func loadConfig() (config, error) {
 
 	return config{
 		externalSecret: []byte(external), internalSecret: []byte(internal),
-		persistenceURL: persistenceURL, matchingURL: matchingURL, authenURL: authenURL,
+		persistenceURL: persistenceURL, matchingURL: matchingURL, authenURL: authenURL, parsingURL: parsingURL,
 		rateLimit: 60, rateWindow: time.Minute,
 		corsOrigins: corsOrigins, allowAllOrigins: allowAllOrigins,
 	}, nil
