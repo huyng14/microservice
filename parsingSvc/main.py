@@ -100,4 +100,6 @@ async def get_result(taskId: str):
             "data": uploaded_cv.get("data", None)}
 
 if __name__ == '__main__':
-    logger.info('Parsing Service running on http://0.0.0.0:9030')
+    # get environment variable for port, default to 9002 if not set
+    port = int(os.getenv("PORT", 9002))
+    logger.info(f'Parsing Service running on http://0.0.0.0:{port}')
