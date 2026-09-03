@@ -19,12 +19,15 @@ COPY . /app
 # Create uploads directory and ensure it exists at runtime
 RUN mkdir -p /app/uploads
 
+# Set default app port
+ENV PORT=9002
+
 # Expose the port used by the FastAPI application
-EXPOSE 9030
+EXPOSE ${PORT}
 
 # Use a non-root user for better container security
 RUN useradd --create-home appuser && chown -R appuser /app
 USER appuser
 
 # Start the FastAPI app using Python module invocation of Uvicorn
-CMD ["python", "-m", "uvicorn", "main:app", "--reload", "--host", "0.0.0.0", "--port", "9030"]
+CMD ["sh", "-c", "python -m uvicorn main:app --reload --host 0.0.0.0 --port ${PORT:-9002}"]
